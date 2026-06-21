@@ -1,0 +1,116 @@
+name: jules-ai-qa
+
+x-qa-volumes: &qa-volumes
+  - ./scenarios:/app/scenarios
+  - ./midscene_run:/app/midscene_run
+  - ./.stagehand-cache:/app/.stagehand-cache
+  - ./test-results:/app/test-results
+  - ./playwright-report:/app/playwright-report
+  - ./data:/app/data
+  - ./.env:/app/.env:ro
+
+x-qa-environment: &qa-environment
+  NODE_ENV: production
+  PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+
+services:
+  qa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jules-ai-qa:latest
+    container_name: jules-qa
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *qa-environment
+      MIDSCENE_MODEL_TIMEOUT: ${MIDSCENE_MODEL_TIMEOUT:-600000}
+      MIDSCENE_INSIGHT_MODEL_TIMEOUT: ${MIDSCENE_INSIGHT_MODEL_TIMEOUT:-600000}
+      MIDSCENE_PLANNING_MODEL_TIMEOUT: ${MIDSCENE_PLANNING_MODEL_TIMEOUT:-600000}
+    volumes: *qa-volumes
+    shm_size: "2gb"
+    ports:
+      - "${UI_PORT:-3840}:3840"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jules-ollama
+    profiles:
+      - stack
+      - llm
+    ports:
+      - "${OLLAMA_HOST_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # Одноразовий pull моделей після старту Ollama
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: jules-ollama-pull
+    profiles:
+      - stack
+      - llm
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_VLM_MODEL: ${MIDSCENE_MODEL_NAME:-ui-tars-1.5-7b}
+      OLLAMA_PLANNER_MODEL: ${PLANNER_MODEL_NAME:-qwen2.5:7b}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "Pulling models: $${OLLAMA_VLM_MODEL} $${OLLAMA_PLANNER_MODEL}"
+        ollama pull "$${OLLAMA_VLM_MODEL:-ui-tars-1.5-7b}" || echo "WARN: VLM model pull failed — pull manually or change .env"
+        ollama pull "$${OLLAMA_PLANNER_MODEL:-qwen2.5:7b}" || echo "WARN: planner model pull failed"
+        echo "Models ready."
+    restart: "no"
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: jules-vllm
+    profiles:
+      - gpu
+    ports:
+      - "${VLLM_HOST_PORT:-8000}:8000"
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+    environment:
+      HF_HOME: /root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --model ${VLLM_MODEL:-bytedance-research/UI-TARS-1.5-7B}
+      --trust-remote-code
+      --max-model-len 8192
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/v1/models || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+volumes:
+  ollama_models:
+    name: jules_ollama_models
+  huggingface_cache:
+    name: jules_huggingface_cache

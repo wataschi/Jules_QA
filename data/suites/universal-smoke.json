@@ -1,0 +1,15 @@
+{
+  "id": "universal-smoke",
+  "name": "Standart Smoke (5 сценаріїв)",
+  "description": "Базовий smoke-набір для будь-якого сайту: завантаження, cookies, навігація, пошук, accessibility.",
+  "scenarioPaths": [
+    "scenarios/universal-page-load.yaml",
+    "scenarios/universal-cookie-consent.yaml",
+    "scenarios/universal-navigation.yaml",
+    "scenarios/universal-search-or-interact.yaml",
+    "scenarios/universal-accessibility-smoke.yaml"
+  ],
+  "stopOnFailure": false,
+  "createdAt": "2026-06-21T00:00:00.000Z",
+  "updatedAt": "2026-06-21T16:00:54.961Z"
+}

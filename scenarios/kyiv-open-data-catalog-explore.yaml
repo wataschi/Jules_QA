@@ -1,0 +1,29 @@
+name: kyiv-open-data-catalog-explore
+goal: "Відкрити каталог відкритих даних, переглянути перелік наборів і відкрити сторінку деталей одного набору"
+target_url: https://data.kyivcity.gov.ua
+tags:
+  - open-data
+  - catalog
+  - smoke
+group: kyivcity
+hints:
+  - "Це портал відкритих даних Києва."
+  - "НЕ відкривати сирі файли ресурсів (.json/.csv) і не запускати завантаження — лише навігація по сторінках каталогу."
+steps:
+  - "Wait for the page to finish loading"
+  - "If a cookie consent banner is visible, accept or close it"
+  - "Click the main navigation link that opens the datasets catalog (e.g. «Набори даних» or «Каталог»)"
+  - "Wait for the catalog page to finish loading"
+  - "Click the first dataset title in the catalog list"
+  - "Wait for the dataset details page to finish loading"
+# Checkpoint: перевіряється ОДРАЗУ після кроку 4 (каталог завантажено),
+# поки агент ще на сторінці списку — до кліку в конкретний набір.
+checkpoints:
+  - afterStep: 4
+    assertion: "На сторінці каталогу видно перелік наборів даних — щонайменше одна назва набору, доступна для кліку"
+# Фінальні асерти перевіряються в кінці, коли агент уже на сторінці деталей набору.
+success_criteria:
+  - "Відкрита сторінка деталей окремого набору даних із чітко видимим заголовком набору"
+  - "На сторінці деталей присутній блок метаданих або опис набору (наприклад, опис, формат, ліцензія або дата оновлення)"
+navigation:
+  type: deterministic

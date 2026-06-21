@@ -1,0 +1,14 @@
+name: universal-accessibility-smoke
+goal: "Перевірити базову читабельність і структуру сторінки"
+hints:
+  - "Перевірити наявність тексту, заголовків, посилань"
+  - "Не потрібен повний WCAG audit — лише smoke"
+steps:
+  - "Wait for page load and dismiss cookie banner if needed"
+  - "Look at the visible page content without scrolling far"
+success_criteria:
+  - "Page contains readable text content"
+  - "A title, heading, or prominent label is visible"
+  - "At least one link or button is visible OR the page is intentionally minimal with only text"
+navigation:
+  type: deterministic

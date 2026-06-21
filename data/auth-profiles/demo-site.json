@@ -1,0 +1,17 @@
+{
+  "id": "demo-site",
+  "loginUrl": "https://example.com/login",
+  "steps": [
+    "Focus the username or email input field",
+    "Type username {{secret:demo-site.username}}",
+    "Focus the password input field",
+    "Type password {{secret:demo-site.password}}",
+    "Click the sign in or login button",
+    "human:Complete CAPTCHA or 2FA if prompted"
+  ],
+  "sessionTtlMinutes": 120,
+  "validityCheck": {
+    "url": "https://example.com/dashboard",
+    "assertion": "The page shows authenticated user content, not a login form"
+  }
+}

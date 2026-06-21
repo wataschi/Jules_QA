@@ -1,0 +1,14 @@
+{
+  "id": "full-journey",
+  "name": "Повний user journey",
+  "description": "Послідовна перевірка ключового шляху користувача: від відкриття сторінки до інтерактивної дії. Зупиняється при першій помилці.",
+  "scenarioPaths": [
+    "scenarios/universal-page-load.yaml",
+    "scenarios/universal-cookie-consent.yaml",
+    "scenarios/universal-navigation.yaml",
+    "scenarios/universal-search-or-interact.yaml"
+  ],
+  "stopOnFailure": true,
+  "createdAt": "2026-06-21T00:00:00.000Z",
+  "updatedAt": "2026-06-21T00:00:00.000Z"
+}

@@ -1,0 +1,16 @@
+name: universal-navigation
+goal: "Перевірити базову навігацію: перехід по головному посиланню меню"
+hints:
+  - "Вибрати перше безпечне посилання в header/nav (не login, не signup, не external download)"
+  - "Якщо меню приховане — відкрити hamburger menu"
+steps:
+  - "Wait for page load and dismiss cookie banner if present"
+  - "Find the main site navigation (header menu or hamburger menu)"
+  - "Click the first safe internal navigation link that is not Login, Sign up, or Cart"
+  - "Wait for the new page or section to load"
+success_criteria:
+  - "Navigation occurred successfully (URL changed or new main content appeared)"
+  - "The destination page shows meaningful content without an error state"
+  - "Browser did not land on an empty or broken page"
+navigation:
+  type: deterministic

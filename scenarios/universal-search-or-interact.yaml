@@ -1,0 +1,15 @@
+name: universal-search-or-interact
+goal: "Знайти і безпечно використати search або головний інтерактивний елемент"
+hints:
+  - "Пріоритет: поле пошуку. Якщо немає — кнопка Learn more / Read more / Explore"
+  - "Не надсилати форми з персональними даними"
+steps:
+  - "Wait for page load and handle cookie banner if visible"
+  - "If a search box exists, click it and type 'test' then submit search or press Enter"
+  - "If no search box exists, click one prominent non-destructive CTA like Learn more, Explore, or Read more"
+  - "Wait for results or new content to appear"
+success_criteria:
+  - "Either search results are shown, or new relevant content opened after the interaction"
+  - "No error page or crash message appeared after the interaction"
+navigation:
+  type: deterministic

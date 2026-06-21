@@ -1,0 +1,16 @@
+{
+  "id": "0b6c6e7e",
+  "name": "OPENDATA",
+  "description": "OPENDATA №1",
+  "scenarioPaths": [
+    "scenarios/universal-page-load.yaml",
+    "scenarios/universal-cookie-consent.yaml",
+    "scenarios/universal-navigation.yaml",
+    "scenarios/universal-accessibility-smoke.yaml",
+    "scenarios/universal-search-or-interact.yaml",
+    "scenarios/dataset-search-filter-download.yaml"
+  ],
+  "stopOnFailure": false,
+  "createdAt": "2026-06-21T16:08:09.908Z",
+  "updatedAt": "2026-06-21T16:08:23.245Z"
+}

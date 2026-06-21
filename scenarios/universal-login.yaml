@@ -1,0 +1,15 @@
+name: universal-login
+goal: Verify authenticated access to a protected area after login
+target_url: https://example.com/dashboard
+auth:
+  profile: demo-site
+tags:
+  - auth
+  - universal
+hints:
+  - Requires auth profile demo-site and vault secrets demo-site.username / demo-site.password
+steps:
+  - Wait for the page to finish loading
+  - Navigate to the user profile or account section
+success_criteria:
+  - The user is logged in and account-specific content is visible

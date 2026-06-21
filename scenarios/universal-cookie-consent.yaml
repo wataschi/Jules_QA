@@ -1,0 +1,13 @@
+name: universal-cookie-consent
+goal: "Перевірити обробку cookie/consent банера, якщо він з'являється"
+hints:
+  - "Якщо банера немає — тест все одно має пройти"
+  - "Не блокувати тест, якщо сайт не показує cookie banner"
+steps:
+  - "Wait for the page to load completely"
+  - "If a cookie consent or privacy banner is visible, accept or dismiss it using the safest available option. If no banner is visible, do nothing and continue"
+success_criteria:
+  - "Either no cookie banner is present, or the cookie banner was handled and no longer blocks the page"
+  - "Main page content is accessible (not blocked by an overlay)"
+navigation:
+  type: deterministic

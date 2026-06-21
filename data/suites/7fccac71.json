@@ -1,0 +1,13 @@
+{
+  "id": "7fccac71",
+  "name": "my-smoke-suite",
+  "description": "Test suite",
+  "scenarioPaths": [
+    "scenarios/ai-test-smoke.yaml",
+    "scenarios/universal-page-load.yaml",
+    "scenarios/universal-cookie-consent.yaml"
+  ],
+  "stopOnFailure": true,
+  "createdAt": "2026-06-21T16:05:14.796Z",
+  "updatedAt": "2026-06-21T16:05:14.796Z"
+}
