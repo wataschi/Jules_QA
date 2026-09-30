@@ -24,6 +24,8 @@ import { startRunRequestSchema, suiteDefinitionSchema, uiSettingsSchema } from '
 import { enhanceScenario, generateScenarioFromDescription, suggestTestIdeas } from './ai-assistant.js';
 import { z } from 'zod';
 import { getMidsceneRunRoot } from './data-paths.js';
+import { allowedLlmHosts, createAuthMiddleware, isLlmBaseUrlAllowed, warnIfApiUnprotected } from './auth.js';
+import { createRegistryRouter } from './registry-routes.js';
 
 dotenv.config();
 
@@ -31,9 +33,16 @@ export function createApp(): express.Application {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
 
+  // Авторизація для всього /api/**, крім GET /api/health.
+  warnIfApiUnprotected();
+  app.use(createAuthMiddleware());
+
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
   });
+
+  // Реєстр тест-кейсів. Міграції проганяються при монтуванні роутера.
+  app.use('/api/registry', createRegistryRouter());
 
   app.get('/api/settings', async (_req, res) => {
     res.json(await loadSettings());
@@ -163,6 +172,16 @@ export function createApp(): express.Application {
     const baseUrl = settings.llmBaseUrl ?? process.env.MIDSCENE_MODEL_BASE_URL;
     if (!baseUrl) {
       res.status(400).json({ ok: false, error: 'LLM URL not configured' });
+      return;
+    }
+    // Ключ моделі йде в заголовку, тому адресу беремо лише з allowlist:
+    // налаштовані в середовищі базові URL моделей або локальний хост.
+    if (!isLlmBaseUrlAllowed(baseUrl)) {
+      res.status(400).json({
+        ok: false,
+        error: 'LLM URL не в allowlist — дозволені лише налаштовані в середовищі моделі й localhost',
+        allowed: allowedLlmHosts(),
+      });
       return;
     }
     try {

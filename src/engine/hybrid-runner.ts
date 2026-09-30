@@ -3,16 +3,17 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { Stagehand } from '@browserbasehq/stagehand';
 import type { Agent } from '@midscene/core/agent';
 import { getEnv } from '../config/env.js';
+import { installModelCallCounter, readProxyModelCalls, takeModelCallCount } from '../config/lmstudio-proxy.js';
 import { parseAuthStep } from '../security/auth-profile.js';
 import { getSecret } from '../security/vault.js';
 import type { Checklist, ScenarioYaml } from '../planning/types.js';
 import { parseStepMarker } from '../planning/types.js';
 import { aiActWithSelfHeal, aiAssertWithSelfHeal } from './self-heal.js';
-import { buildBugReport, classifyError, errorMessage, writeBugReport } from './healer.js';
+import { buildBugReport, classifyError, errorMessage, TARGET_UNAVAILABLE, writeBugReport } from './healer.js';
 import { ResultsCollector, type HandledBy } from './results.js';
 import { ensureSession } from './session.js';
 import { runSecretTypeStep } from './secret-type.js';
-import { detectBlocker } from './blocker-detect.js';
+import { detectBlocker, isNavigationStep } from './blocker-detect.js';
 import { pauseForHuman } from './hitl.js';
 
 export interface HybridRunContext {
@@ -82,16 +83,56 @@ export async function closeStagehand(): Promise<void> {
   }
 }
 
+/**
+ * Заголовки сторінок-заглушок антибот-захисту (Cloudflare, DDoS-Guard).
+ * Такий екран віддає або 403, або навіть 200 — але застосунку за ним немає.
+ */
+const BOT_WALL_TITLE = /just a moment|checking your browser|verify you are human|attention required|ddos-guard|один момент/i;
+
+/**
+ * Перехід із перевіркою того, що ми взагалі потрапили в застосунок.
+ *
+ * 5xx на документі або екран антибот-захисту означають, що тестувати нічого:
+ * ціль недоступна. Краще впасти одразу з чесною причиною, ніж витратити
+ * хвилини на пошук елементів на сторінці-заглушці — і потім показати в
+ * реєстрі «регресію», якої не було.
+ */
+async function gotoChecked(page: Page, url: string): Promise<void> {
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
+  if (!response) return;
+
+  const status = response.status();
+  if (status >= 500) {
+    throw new Error(
+      `${TARGET_UNAVAILABLE}: ${url} відповів HTTP ${status} — середовище недоступне, кейс не виконувався`,
+    );
+  }
+
+  const title = await Promise.resolve()
+    .then(() => page.title())
+    .catch(() => '');
+  if (BOT_WALL_TITLE.test(title)) {
+    throw new Error(
+      `${TARGET_UNAVAILABLE}: ${url} віддав HTTP ${status} і сторінку захисту від ботів («${title.trim()}») — ` +
+        `кейс не виконувався. Потрібен доступ у браузері з довіреної мережі або обхід захисту на боці середовища.`,
+    );
+  }
+}
+
 export async function runDeterministicNavigation(
   page: Page,
   scenario?: ScenarioYaml,
   targetUrl?: string,
 ): Promise<void> {
   const nav = scenario?.navigation;
-  const url = nav?.url ?? targetUrl ?? getEnv().QA_TARGET_URL;
+  // Закріплена ціль перекриває і `navigation.url`: інакше браузер ішов на
+  // адресу зі сценарію, а у звіті стояла та, яку просили — і кеш писався
+  // під ключем сторінки, якої прогін не бачив.
+  const pinned = process.env.QA_TARGET_PINNED === '1';
+  const url = (pinned ? targetUrl : nav?.url ?? targetUrl) ?? getEnv().QA_TARGET_URL;
 
   if (nav?.type === 'deterministic' || !nav) {
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await gotoChecked(page, url);
     return;
   }
 
@@ -101,7 +142,7 @@ export async function runDeterministicNavigation(
     return;
   }
 
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await gotoChecked(page, url);
 }
 
 function isPurePageLoadWaitStep(step: string): boolean {
@@ -207,6 +248,28 @@ async function executeStep(
   return { handledBy: 'midscene', attempts: outcome.attempts, healed: outcome.healed };
 }
 
+/**
+ * Скільки разів рушій звернувся до моделі з попереднього виміру.
+ *
+ * Основне джерело — лічильник проксі: він в іншому процесі, але бачить увесь
+ * трафік. Локальний fetch-хук лишається запасним варіантом, коли проксі вимкнено.
+ * Якщо не знає жодне джерело — повертаємо `undefined`, а не 0, щоб звіт не брехав.
+ */
+let lastRemoteModelCalls: number | null = null;
+
+async function takeModelCalls(): Promise<number | undefined> {
+  const remote = await readProxyModelCalls();
+  if (remote !== null) {
+    const previous = lastRemoteModelCalls ?? remote;
+    lastRemoteModelCalls = remote;
+    takeModelCallCount();
+    const delta = remote - previous;
+    return delta >= 0 ? delta : undefined;
+  }
+  const local = takeModelCallCount();
+  return local > 0 ? local : undefined;
+}
+
 export async function executeChecklist(ctx: HybridRunContext): Promise<void> {
   const { page, agent, checklist, scenario, runId, context } = ctx;
   const collector = new ResultsCollector({
@@ -216,32 +279,51 @@ export async function executeChecklist(ctx: HybridRunContext): Promise<void> {
     mode: getEnv().QA_MODE,
   });
 
+  // Лічильник викликів моделі рахується в цьому ж процесі, де крокує рушій.
+  installModelCallCounter();
+  takeModelCallCount();
+  lastRemoteModelCalls = await readProxyModelCalls();
+
   let fatal: Error | null = null;
   let assertionFailure: Error | null = null;
   let assertSeq = 0;
+  // Бухгалтерія «що вже записано» — щоб у `finally` дописати рівно те, до чого
+  // прогін не дійшов, незалежно від того, де саме він урвався.
+  const recordedSteps = new Set<number>();
+  const recordedCheckpoints = new Set<number>();
+  let recordedAssertions = 0;
 
   try {
-    if (scenario?.auth?.profile) {
-      if (!context) {
-        throw new Error('Browser context is required for authenticated scenarios');
+    try {
+      if (scenario?.auth?.profile) {
+        if (!context) {
+          throw new Error('Browser context is required for authenticated scenarios');
+        }
+        await ensureSession(scenario.auth.profile, { page, agent, context, runId });
+      } else {
+        await runDeterministicNavigation(page, scenario, checklist.targetUrl);
       }
-      await ensureSession(scenario.auth.profile, { page, agent, context, runId });
-    } else {
-      await runDeterministicNavigation(page, scenario, checklist.targetUrl);
+    } catch (error) {
+      // Падіння до першого кроку не належить жодному кроку — інакше причина
+      // зникала, а прогін показував тільки «Test exited with code 1».
+      collector.setFatalError(errorMessage(error));
+      throw error;
     }
 
     for (const [index, step] of checklist.steps.entries()) {
       const stepNumber = index + 1;
       const label = `step-${stepNumber}`;
       const started = Date.now();
+      let stepOk = false;
 
       try {
         const result = await executeStep(page, agent, step, label, runId);
-        recordStep(collector, index, step, result.handledBy, started, {
+        await recordStep(collector, index, step, result.handledBy, started, {
           attempts: result.attempts,
           healed: result.healed,
         });
-        await maybePauseForBlocker(page, runId);
+        recordedSteps.add(index);
+        stepOk = true;
       } catch (error) {
         const cls = classifyError(error);
         const blocker = await detectBlocker(page).catch(() => null);
@@ -249,11 +331,12 @@ export async function executeChecklist(ctx: HybridRunContext): Promise<void> {
           try {
             await maybePauseForBlocker(page, runId);
             const retry = await executeStep(page, agent, step, label, runId);
-            recordStep(collector, index, step, retry.handledBy, started, {
+            await recordStep(collector, index, step, retry.handledBy, started, {
               attempts: retry.attempts,
               healed: retry.healed,
             });
-            continue;
+            recordedSteps.add(index);
+            stepOk = true;
           } catch (retryError) {
             collector.record({
               index,
@@ -264,31 +347,44 @@ export async function executeChecklist(ctx: HybridRunContext): Promise<void> {
               healed: false,
               handledBy: 'midscene',
               durationMs: Date.now() - started,
+              modelCalls: await takeModelCalls(),
               error: errorMessage(retryError),
               errorClass: classifyError(retryError),
             });
+            recordedSteps.add(index);
             fatal = retryError instanceof Error ? retryError : new Error(errorMessage(retryError));
-            break;
           }
+        } else {
+          collector.record({
+            index,
+            kind: 'step',
+            instruction: step,
+            status: 'failed',
+            attempts: 1,
+            healed: false,
+            handledBy: 'midscene',
+            durationMs: Date.now() - started,
+            modelCalls: await takeModelCalls(),
+            error: errorMessage(error),
+            errorClass: cls,
+          });
+          recordedSteps.add(index);
+          fatal = error instanceof Error ? error : new Error(errorMessage(error));
         }
-
-        collector.record({
-          index,
-          kind: 'step',
-          instruction: step,
-          status: 'failed',
-          attempts: 1,
-          healed: false,
-          handledBy: 'midscene',
-          durationMs: Date.now() - started,
-          error: errorMessage(error),
-          errorClass: cls,
-        });
-        fatal = error instanceof Error ? error : new Error(errorMessage(error));
-        break;
       }
 
-      for (const checkpoint of checklist.checkpoints.filter((c) => c.afterStep === stepNumber)) {
+      if (!stepOk) break;
+
+      // Детекція блокерів лише після навігаційних кроків — після звичайного
+      // кліку/вводу вона майже ніколи нічого не знаходить і коштує запитів.
+      // Свідомо ПОЗА try кроку: таймаут HITL не має вдруге записати вже
+      // зафіксований крок як failed (це ламало стабільність summary.total).
+      if (isNavigationStep(step)) {
+        await maybePauseForBlocker(page, runId);
+      }
+
+      for (const [cpIndex, checkpoint] of checklist.checkpoints.entries()) {
+        if (checkpoint.afterStep !== stepNumber) continue;
         const passed = await evaluateAssertion(
           collector,
           agent,
@@ -296,7 +392,9 @@ export async function executeChecklist(ctx: HybridRunContext): Promise<void> {
           assertSeq++,
           checkpoint.assertion,
           `checkpoint-${stepNumber}`,
+          stepNumber,
         );
+        recordedCheckpoints.add(cpIndex);
         if (!passed) {
           assertionFailure = assertionFailure ?? new Error(`Checkpoint failed: ${checkpoint.assertion}`);
         }
@@ -313,12 +411,21 @@ export async function executeChecklist(ctx: HybridRunContext): Promise<void> {
           assertion,
           `assert-${aIndex + 1}`,
         );
+        recordedAssertions = aIndex + 1;
         if (!passed) {
           assertionFailure = assertionFailure ?? new Error(`Assertion failed: ${assertion}`);
         }
       }
     }
   } finally {
+    // Недосягнуті кроки/ассершени фіксуємо як 'skipped', інакше вони просто
+    // зникали з результатів і `summary.total` стрибав від прогону до прогону.
+    recordSkippedRemainder(collector, checklist, {
+      recordedSteps,
+      recordedCheckpoints,
+      recordedAssertions,
+      assertSeq,
+    });
     await collector.write().catch((err) => console.warn('[results] write failed:', err));
   }
 
@@ -335,6 +442,8 @@ async function evaluateAssertion(
   index: number,
   assertion: string,
   label: string,
+  /** Для проміжних перевірок — номер кроку, після якого вона стоїть. */
+  checkpointAfterStep?: number,
 ): Promise<boolean> {
   const started = Date.now();
   const outcome = await aiAssertWithSelfHeal(agent, assertion, {
@@ -352,13 +461,18 @@ async function evaluateAssertion(
       healed: outcome.healed,
       handledBy: 'midscene',
       durationMs: Date.now() - started,
+      modelCalls: await takeModelCalls(),
       thought: outcome.thought,
     });
     return true;
   }
 
   if (outcome.errorClass === 'assertion') {
-    const report = buildBugReport({ assertion, thought: outcome.thought });
+    const report = buildBugReport({
+      assertion,
+      thought: outcome.thought,
+      ...(checkpointAfterStep !== undefined ? { checkpointAfterStep } : {}),
+    });
     report.reportPath = await writeBugReport(scenarioId, report).catch(() => undefined);
     collector.addBugReport(report);
     console.warn(`[bug] Assertion revealed an app defect: ${assertion}`);
@@ -373,6 +487,7 @@ async function evaluateAssertion(
     healed: false,
     handledBy: 'midscene',
     durationMs: Date.now() - started,
+    modelCalls: await takeModelCalls(),
     error: outcome.error,
     errorClass: outcome.errorClass,
     thought: outcome.thought,
@@ -380,14 +495,14 @@ async function evaluateAssertion(
   return false;
 }
 
-function recordStep(
+async function recordStep(
   collector: ResultsCollector,
   index: number,
   instruction: string,
   handledBy: HandledBy,
   startedAt: number,
   extra?: { attempts?: number; healed?: boolean },
-): void {
+): Promise<void> {
   collector.record({
     index,
     kind: 'step',
@@ -397,7 +512,76 @@ function recordStep(
     healed: extra?.healed ?? false,
     handledBy,
     durationMs: Date.now() - startedAt,
+    // Скільки викликів моделі знадобилось саме на цей крок. 0 у regression —
+    // пряме підтвердження, що крок пройшов детерміновано, без LLM.
+    modelCalls: await takeModelCalls(),
   });
+}
+
+interface SkippedBookkeeping {
+  recordedSteps: Set<number>;
+  recordedCheckpoints: Set<number>;
+  recordedAssertions: number;
+  assertSeq: number;
+}
+
+/**
+ * Дописує `status='skipped'` для кроків, чекпойнтів та фінальних ассершенів, до
+ * яких прогін не дійшов. Без цього після фатального падіння решта пунктів просто
+ * зникала з результатів, і `summary.total` був різний у кожному прогоні —
+ * порівнювати прогони між собою було неможливо.
+ */
+function recordSkippedRemainder(
+  collector: ResultsCollector,
+  checklist: Checklist,
+  state: SkippedBookkeeping,
+): void {
+  let assertSeq = state.assertSeq;
+
+  for (const [index, step] of checklist.steps.entries()) {
+    if (state.recordedSteps.has(index)) continue;
+    collector.record({
+      index,
+      kind: 'step',
+      instruction: step,
+      status: 'skipped',
+      attempts: 0,
+      healed: false,
+      handledBy: 'deterministic',
+      durationMs: 0,
+      modelCalls: 0,
+    });
+  }
+
+  for (const [index, checkpoint] of checklist.checkpoints.entries()) {
+    if (state.recordedCheckpoints.has(index)) continue;
+    collector.record({
+      index: assertSeq++,
+      kind: 'assertion',
+      instruction: checkpoint.assertion,
+      status: 'skipped',
+      attempts: 0,
+      healed: false,
+      handledBy: 'deterministic',
+      durationMs: 0,
+      modelCalls: 0,
+    });
+  }
+
+  for (const [index, assertion] of checklist.assertions.entries()) {
+    if (index < state.recordedAssertions) continue;
+    collector.record({
+      index: assertSeq++,
+      kind: 'assertion',
+      instruction: assertion,
+      status: 'skipped',
+      attempts: 0,
+      healed: false,
+      handledBy: 'deterministic',
+      durationMs: 0,
+      modelCalls: 0,
+    });
+  }
 }
 
 /** Placeholder hooks — CAPTCHA/TOTP handled via human-in-the-loop. */

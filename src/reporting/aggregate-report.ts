@@ -1,7 +1,26 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { artifactNameCandidates, scenarioKey } from '../config/env.js';
 import { getMidsceneRunRoot } from '../server/data-paths.js';
 import { loadRunResults, type RunResults } from '../engine/results.js';
+
+/**
+ * Опції збору артефактів.
+ *
+ * `since` робить збір ПРОГОНО-орієнтованим: у звіт потрапляють лише відео та
+ * Midscene-звіти, створені після старту цього прогону. Без цього кожен звіт
+ * тягнув усе, що лежить у каталозі, і «докази» падіння тонули серед чужих.
+ */
+export interface CollectOptions {
+  /** ISO-час або мілісекунди старту прогону. */
+  since?: string | number;
+}
+
+function toEpoch(since: CollectOptions['since']): number | null {
+  if (since === undefined) return null;
+  const value = typeof since === 'number' ? since : Date.parse(since);
+  return Number.isFinite(value) ? value : null;
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -39,6 +58,7 @@ function renderEvidence(results: RunResults | null): string {
         <td>${s.handledBy}</td>
         <td>${s.attempts}${s.healed ? ' 🩹' : ''}</td>
         <td>${s.durationMs} ms</td>
+        <td>${s.modelCalls ?? '—'}</td>
         <td>${s.error ? escapeHtml(s.error) : s.thought ? escapeHtml(s.thought) : ''}</td>
       </tr>`,
     )
@@ -58,12 +78,14 @@ function renderEvidence(results: RunResults | null): string {
   return `
     <p>
       <strong>Summary:</strong> total ${summary.total},
-      passed ${summary.passed}, failed ${summary.failed}, healed ${summary.healed} ·
+      passed ${summary.passed}, failed ${summary.failed}, healed ${summary.healed},
+      skipped ${summary.skipped} ·
+      <strong>model calls:</strong> ${summary.modelCalls} ·
       <strong>verdict:</strong> ${results.passed ? '✅ passed' : '❌ failed'}
     </p>
     ${results.generatedSpecPath ? `<p><strong>Deterministic spec:</strong> <code>${escapeHtml(results.generatedSpecPath)}</code></p>` : ''}
     <table>
-      <thead><tr><th>#</th><th>Kind</th><th>Instruction</th><th>Status</th><th>Handled by</th><th>Attempts</th><th>Duration</th><th>Detail</th></tr></thead>
+      <thead><tr><th>#</th><th>Kind</th><th>Instruction</th><th>Status</th><th>Handled by</th><th>Attempts</th><th>Duration</th><th>LLM calls</th><th>Detail</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <h3>Bug reports</h3>
@@ -85,7 +107,11 @@ export interface ReportUrls {
   plans: string[];
 }
 
-async function findFiles(dir: string, predicate: (name: string) => boolean): Promise<string[]> {
+async function findFiles(
+  dir: string,
+  predicate: (name: string) => boolean,
+  modifiedAfter?: number | null,
+): Promise<string[]> {
   const results: string[] = [];
 
   async function walk(current: string): Promise<void> {
@@ -101,6 +127,12 @@ async function findFiles(dir: string, predicate: (name: string) => boolean): Pro
       if (entry.isDirectory()) {
         await walk(full);
       } else if (entry.isFile() && predicate(entry.name)) {
+        if (modifiedAfter !== undefined && modifiedAfter !== null) {
+          // Артефакт належить прогону лише якщо створений/оновлений після старту.
+          // 1 с допуску — на розбіжність таймстемпів файлової системи.
+          const stat = await fs.stat(full).catch(() => null);
+          if (!stat || stat.mtimeMs < modifiedAfter - 1000) continue;
+        }
         results.push(full);
       }
     }
@@ -110,13 +142,18 @@ async function findFiles(dir: string, predicate: (name: string) => boolean): Pro
   return results.sort();
 }
 
-export async function collectReportLinks(scenarioId: string): Promise<ReportLinks> {
+export async function collectReportLinks(
+  scenarioIdOrKey: string,
+  opts?: CollectOptions,
+): Promise<ReportLinks> {
   const root = process.cwd();
   const midsceneRoot = getMidsceneRunRoot();
+  const since = toEpoch(opts?.since);
 
   const midsceneReports = await findFiles(
     path.join(midsceneRoot, 'report'),
     (name) => name.endsWith('.html') && name.includes('report'),
+    since,
   );
 
   const playwrightIndex = path.join(root, 'playwright-report', 'index.html');
@@ -128,15 +165,23 @@ export async function collectReportLinks(scenarioId: string): Promise<ReportLink
     playwrightReport = null;
   }
 
-  const videos = await findFiles(path.join(root, 'test-results'), (name) => name.endsWith('.webm'));
+  const videos = await findFiles(
+    path.join(root, 'test-results'),
+    (name) => name.endsWith('.webm'),
+    since,
+  );
 
-  const planFile = path.join(midsceneRoot, 'plans', `${scenarioId}.json`);
+  // План читаємо за ключем, з fallback на стару назву без хеша.
   const plans: string[] = [];
-  try {
-    await fs.access(planFile);
-    plans.push(planFile);
-  } catch {
-    /* no plan yet */
+  for (const name of artifactNameCandidates(scenarioIdOrKey)) {
+    const planFile = path.join(midsceneRoot, 'plans', `${name}.json`);
+    try {
+      await fs.access(planFile);
+      plans.push(planFile);
+      break;
+    } catch {
+      /* пробуємо наступного кандидата */
+    }
   }
 
   return { midsceneReports, playwrightReport, videos, plans };
@@ -166,8 +211,11 @@ export function filePathToReportUrl(filePath: string): string {
   return `/${rel}`;
 }
 
-export async function collectReportUrls(scenarioId: string): Promise<ReportUrls> {
-  const links = await collectReportLinks(scenarioId);
+export async function collectReportUrls(
+  scenarioIdOrKey: string,
+  opts?: CollectOptions,
+): Promise<ReportUrls> {
+  const links = await collectReportLinks(scenarioIdOrKey, opts);
   return {
     midsceneReports: links.midsceneReports.map(filePathToReportUrl),
     playwrightReport: links.playwrightReport ? filePathToReportUrl(links.playwrightReport) : null,
@@ -248,14 +296,19 @@ function renderHtml(scenarioId: string, urls: ReportUrls, results: RunResults | 
 </html>`;
 }
 
-export async function aggregateReports(scenarioId: string): Promise<string> {
-  const urls = await collectReportUrls(scenarioId);
-  const results = await loadRunResults(scenarioId);
+export async function aggregateReports(
+  scenarioIdOrKey: string,
+  opts?: CollectOptions,
+): Promise<string> {
+  const urls = await collectReportUrls(scenarioIdOrKey, opts);
+  const results = await loadRunResults(scenarioIdOrKey);
   const outDir = path.join(getMidsceneRunRoot(), 'aggregate');
   await fs.mkdir(outDir, { recursive: true });
 
-  const outPath = path.join(outDir, `${scenarioId}-index.html`);
-  await fs.writeFile(outPath, renderHtml(scenarioId, urls, results), 'utf-8');
+  // Ім'я звіту — той самий ключ, що й у cache/plans/results/generated.
+  const key = scenarioKey(scenarioIdOrKey);
+  const outPath = path.join(outDir, `${key}-index.html`);
+  await fs.writeFile(outPath, renderHtml(key, urls, results), 'utf-8');
 
   console.log(`[report] Aggregate report: ${toRelative(outPath)}`);
   return outPath;

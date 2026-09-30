@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetEnvCache } from '../../../src/config/env.js';
 import {
@@ -70,6 +71,33 @@ describe('hitl', () => {
   it('skips when runId is local', async () => {
     const outcome = await pauseForHuman('local', 'no wait');
     expect(outcome).toBe('skipped');
+  });
+
+  it('really waits for a real runId instead of returning immediately', async () => {
+    // CLI тепер генерує справжній QA_RUN_ID (uuid), тож `human:`-крок мусить
+    // блокуватися до сигналу оператора, а не лише друкувати попередження.
+    const runId = randomUUID();
+    let settled = false;
+    const pausePromise = pauseForHuman(runId, 'operator needed').then((outcome) => {
+      settled = true;
+      return outcome;
+    });
+
+    await new Promise((r) => setTimeout(r, 300));
+    expect(settled).toBe(false);
+
+    // Файл контролю створений — саме його опитує цикл очікування.
+    const controlPath = path.join(ws.root, 'midscene_run', 'control', `${runId}.json`);
+    await expect(fs.readFile(controlPath, 'utf-8')).resolves.toContain('"resume": false');
+
+    await signalResume(runId);
+    await expect(pausePromise).resolves.toBe('resumed');
+  });
+
+  it('times out when nobody resumes', async () => {
+    process.env.QA_HITL_TIMEOUT_MS = '600';
+    resetEnvCache();
+    await expect(pauseForHuman(randomUUID(), 'nobody home')).resolves.toBe('timeout');
   });
 });
 

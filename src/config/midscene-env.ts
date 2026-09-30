@@ -45,6 +45,11 @@ export function deriveProxyUrl(upstreamBaseUrl: string): string {
 export function bootstrapMidsceneEnv(): Record<string, string> {
   applyTlsPolicy();
 
+  // Знімок екрана: сторінки з безперервною анімацією не встигають віддати кадр
+  // за зашитi Midscene 10 с. Патч scripts/patch-midscene-screenshot.mjs читає
+  // цю змінну, тож тримаємо її налаштовною через QA_SCREENSHOT_TIMEOUT_MS.
+  setIfMissing('MIDSCENE_SCREENSHOT_TIMEOUT_MS', process.env.QA_SCREENSHOT_TIMEOUT_MS ?? '30000');
+
   // Original upstream (never rewritten): the LM Studio image-transport proxy and
   // /api/llm/check read this to reach the real server.
   const upstreamBaseUrl = process.env.MIDSCENE_MODEL_BASE_URL ?? process.env.OPENAI_BASE_URL;

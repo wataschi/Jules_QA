@@ -1,0 +1,24 @@
+name: verify-media-page-load-speed
+goal: Перевірити, що сторінка з медіа-контентом завантажується коректно та відображає основні елементи без помилок.
+target_url: https://www.vyshnevskyi.online
+tags:
+  - performance
+  - media
+  - load-time
+group: Performance Testing
+hints:
+  - Використовуйте видимі елементи інтерфейсу для верифікації, а не консоль браузера.
+  - Переконайтеся, що кроки містять лише одну дію на рядок.
+  - Успіх тесту має підтверджуватися візуально на екрані.
+steps:
+  - navigate to the target URL
+  - wait for the page to fully load and stabilize
+  - scroll down slightly to trigger lazy-loaded media if present
+  - wait for visible media elements (images or video players) to render
+checkpoints: []
+success_criteria:
+  - The main header or title of the page is visible on screen.
+  - At least one image or media player element is rendered without broken icon indicators.
+navigation:
+  type: deterministic
+  url: https://www.vyshnevskyi.online

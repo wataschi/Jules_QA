@@ -11,7 +11,17 @@ export const uiSettingsSchema = z.object({
 
 export type UiSettings = z.infer<typeof uiSettingsSchema>;
 
-export const runStatusSchema = z.enum(['queued', 'running', 'paused', 'passed', 'failed', 'cancelled']);
+// 'skipped' — крок набору, який не запустився через stopOnFailure. Раніше такі
+// прогони назавжди лишалися 'queued' і виглядали як «висять у черзі».
+export const runStatusSchema = z.enum([
+  'queued',
+  'running',
+  'paused',
+  'passed',
+  'failed',
+  'cancelled',
+  'skipped',
+]);
 
 export type RunStatus = z.infer<typeof runStatusSchema>;
 
@@ -23,7 +33,17 @@ export const runRecordSchema = z.object({
   id: z.string(),
   status: runStatusSchema,
   runType: runTypeSchema.optional().default('single'),
+  /**
+   * Адреса, на яку прогін пішов насправді. Пріоритет: закріплений URL виклику →
+   * `target_url` сценарію → збережений глобальний дефолт.
+   */
   qaTargetUrl: z.string(),
+  /**
+   * Витіснена адреса — та, що програла в цьому пріоритеті. Залежно від випадку
+   * це або ціль сценарію, або глобальний дефолт; у звіті вона потрібна, щоб
+   * було видно, що вибір узагалі стояв.
+   */
+  requestedTargetUrl: z.string().optional(),
   qaScenarioPath: z.string(),
   qaMode: z.enum(['warm-up', 'regression']),
   scenarioName: z.string().optional(),
@@ -33,6 +53,8 @@ export const runRecordSchema = z.object({
   stepIndex: z.number().optional(),
   totalSteps: z.number().optional(),
   stopOnFailure: z.boolean().optional(),
+  /** Коли прогін поставили в чергу. `startedAt` — коли він справді почав виконуватись. */
+  queuedAt: z.string().optional(),
   startedAt: z.string(),
   finishedAt: z.string().optional(),
   exitCode: z.number().optional(),
@@ -57,6 +79,7 @@ export const runRecordSchema = z.object({
         healed: z.boolean(),
         handledBy: z.enum(['midscene', 'playwright', 'stagehand', 'deterministic']),
         durationMs: z.number(),
+        modelCalls: z.number().optional(),
         error: z.string().optional(),
         errorClass: z.string().optional(),
         thought: z.string().optional(),
@@ -71,6 +94,8 @@ export const runRecordSchema = z.object({
           passed: z.number(),
           failed: z.number(),
           healed: z.number(),
+          skipped: z.number().optional(),
+          modelCalls: z.number().optional(),
         })
         .optional(),
       bugReports: z
@@ -81,6 +106,11 @@ export const runRecordSchema = z.object({
             severity: z.enum(['low', 'medium', 'high']),
             thought: z.string().optional(),
             rootCauseHypothesis: z.string().optional(),
+            /** `unconfirmed` — вердикт без пояснення або спростований далі. */
+            confidence: z.enum(['confirmed', 'unconfirmed']).optional(),
+            checkpointAfterStep: z.number().optional(),
+            contradictedBy: z.string().optional(),
+            reportPath: z.string().optional(),
           }),
         )
         .optional(),

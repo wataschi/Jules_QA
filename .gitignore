@@ -18,4 +18,14 @@ data/runs/*
 !data/runs/.gitkeep
 data/settings.json
 data/secrets.vault
+# Чутливі артефакти прогонів: cookie/сесії, профілі автентифікації, локальна БД
+# реєстру та логи — жодного з них не має бути в git.
+data/storage-states/
+data/auth-profiles/
+data/registry.db*
+data/*.log
 *.log
+
+# Сторонні MCP-сервери лежать тут власними репозиторіями — у нашу історію
+# вони не входять, інакше git запише їх зламаним вкладеним репо.
+mcp-servers/

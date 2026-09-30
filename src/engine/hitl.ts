@@ -59,29 +59,43 @@ function isInteractiveCli(): boolean {
   return process.stdin.isTTY === true && !process.env.CI;
 }
 
-async function waitForEnterKey(timeoutMs: number): Promise<boolean> {
-  if (!isInteractiveCli()) return false;
+interface EnterKeyWatcher {
+  /** `true` щойно оператор натиснув Enter у цьому терміналі. */
+  pressed: () => boolean;
+  cancel: () => void;
+}
 
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    let settled = false;
+/**
+ * Слухає Enter у TTY НЕблокуюче.
+ *
+ * Раніше цикл очікування робив `await enterPromise` на кожній ітерації, тож у
+ * інтерактивному терміналі він зависав до самого таймауту і жодного разу не
+ * перечитував файл контролю — кнопка Resume у дашборді не працювала для
+ * CLI-прогону. Тепер натискання лише перемикає прапорець, а опитування файлу
+ * продовжується.
+ */
+function watchEnterKey(): EnterKeyWatcher {
+  if (!isInteractiveCli()) {
+    return { pressed: () => false, cancel: () => undefined };
+  }
 
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      rl.close();
-      resolve(false);
-    }, timeoutMs);
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let enterPressed = false;
+  let closed = false;
 
-    console.log('[hitl] Press Enter in this terminal to resume (or use dashboard Resume)…');
-    rl.once('line', () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      rl.close();
-      resolve(true);
-    });
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    rl.close();
+  };
+
+  console.log('[hitl] Press Enter in this terminal to resume (or use dashboard Resume)…');
+  rl.once('line', () => {
+    enterPressed = true;
+    close();
   });
+
+  return { pressed: () => enterPressed, cancel: close };
 }
 
 /**
@@ -101,22 +115,26 @@ export async function pauseForHuman(runId: string, reason: string): Promise<Hitl
   const pollMs = 1000;
   const start = Date.now();
 
-  const enterPromise = waitForEnterKey(timeoutMs);
+  const enterWatcher = watchEnterKey();
 
-  while (Date.now() - start < timeoutMs) {
-    const control = await readControl(runId);
-    if (control?.resume) {
-      console.log(HITL_RESUMED_LOG);
-      return 'resumed';
+  try {
+    while (Date.now() - start < timeoutMs) {
+      const control = await readControl(runId);
+      if (control?.resume) {
+        console.log(HITL_RESUMED_LOG);
+        return 'resumed';
+      }
+
+      if (enterWatcher.pressed()) {
+        await signalResume(runId);
+        console.log(HITL_RESUMED_LOG);
+        return 'resumed';
+      }
+
+      await sleep(pollMs);
     }
-
-    if (await enterPromise) {
-      await signalResume(runId);
-      console.log(HITL_RESUMED_LOG);
-      return 'resumed';
-    }
-
-    await sleep(pollMs);
+  } finally {
+    enterWatcher.cancel();
   }
 
   console.log(HITL_TIMEOUT_LOG);

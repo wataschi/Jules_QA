@@ -7,6 +7,7 @@ import {
   collectReportUrls,
   filePathToReportUrl,
 } from '../../../src/reporting/aggregate-report.js';
+import { scenarioKey } from '../../../src/config/env.js';
 import { createTempWorkspace, type TempWorkspace } from '../../helpers/temp-workspace.js';
 
 describe('aggregate-report', () => {
@@ -43,6 +44,28 @@ describe('aggregate-report', () => {
     expect(filePathToReportUrl(path.join(ws.midsceneDir, 'plans', 'x.json'))).toBe('/reports/plans/x.json');
   });
 
+  it('collectReportLinks with `since` keeps only artifacts from this run', async () => {
+    const reportDir = path.join(ws.midsceneDir, 'report');
+    await fs.mkdir(reportDir, { recursive: true });
+
+    const oldReport = path.join(reportDir, 'old-report.html');
+    await fs.writeFile(oldReport, '<html></html>', 'utf-8');
+    // Штучно «старимо» файл на годину — він належить попередньому прогону.
+    const hourAgo = new Date(Date.now() - 3_600_000);
+    await fs.utimes(oldReport, hourAgo, hourAgo);
+
+    const runStart = new Date().toISOString();
+    const freshReport = path.join(reportDir, 'fresh-report.html');
+    await fs.writeFile(freshReport, '<html></html>', 'utf-8');
+
+    const all = await collectReportLinks('since-test');
+    expect(all.midsceneReports).toHaveLength(2);
+
+    const scoped = await collectReportLinks('since-test', { since: runStart });
+    expect(scoped.midsceneReports).toHaveLength(1);
+    expect(scoped.midsceneReports[0]).toContain('fresh-report.html');
+  });
+
   it('collectReportUrls returns server URLs', async () => {
     const planPath = path.join(ws.midsceneDir, 'plans', 'agg-test.json');
     await fs.writeFile(planPath, '{"scenarioId":"agg-test"}', 'utf-8');
@@ -56,10 +79,13 @@ describe('aggregate-report', () => {
     await fs.writeFile(planPath, '{"scenarioId":"agg-test"}', 'utf-8');
 
     const outPath = await aggregateReports('agg-test');
-    expect(outPath).toContain('agg-test-index.html');
+    // Ім'я звіту тепер містить хеш цілі (scenarioKey), а план читається з
+    // fallback на стару назву без хеша.
+    expect(path.basename(outPath)).toBe(`${scenarioKey('agg-test')}-index.html`);
     const html = await fs.readFile(outPath, 'utf-8');
     expect(html).toContain('Jules AI QA');
     expect(html).toContain('agg-test');
+    expect(html).toContain(scenarioKey('agg-test'));
     expect(html).toContain('href="/reports/plans/agg-test.json"');
     expect(html).not.toContain('href="midscene_run/');
     expect(html).not.toContain('href="test-results/');

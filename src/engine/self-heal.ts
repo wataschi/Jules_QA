@@ -1,5 +1,12 @@
 import type { Agent } from '@midscene/core/agent';
-import { classifyError, errorMessage, isFatal, isHealable, type ErrorClass } from './healer.js';
+import {
+  classifyError,
+  errorMessage,
+  isContextOverflow,
+  isFatal,
+  isHealable,
+  type ErrorClass,
+} from './healer.js';
 
 const MAX_HEAL_ATTEMPTS = 3;
 const MAX_ASSERT_ATTEMPTS = 2;
@@ -42,6 +49,21 @@ export interface SelfHealOptions {
 export interface ActOutcome {
   attempts: number;
   healed: boolean;
+}
+
+/**
+ * Витягує причину вердикту. Midscene віддає `thought` не завжди — слабша модель
+ * може повернути лише `pass: false`. Тоді пояснення лишається в `message`
+ * («Assertion failed: …\nReason: …»), тож дістаємо його звідти: без причини
+ * дефект у звіті виглядав порожнім і не піддавався розбору.
+ */
+function assertionReason(
+  result: { thought?: string; message?: string } | undefined,
+): string | undefined {
+  const thought = result?.thought?.trim();
+  if (thought) return thought;
+  const reason = result?.message?.match(/\bReason:\s*([\s\S]+)$/)?.[1]?.trim();
+  return reason && reason !== '(no_reason)' ? reason : undefined;
 }
 
 export interface AssertOutcome {
@@ -120,12 +142,17 @@ export async function aiAssertWithSelfHeal(
   const label = options.label ?? assertion.slice(0, 60);
   let lastError: unknown;
   let lastThought: string | undefined;
+  // Дерево доступності допомагає слабшим моделям, але на великих сторінках не
+  // влазить у вікно контексту. Тоді знімаємо його і питаємо лише по скриншоту:
+  // краще вердикт по картинці, ніж жодного вердикту.
+  let domIncluded = true;
+  let limit = MAX_ASSERT_ATTEMPTS;
 
-  for (let attempt = 1; attempt <= MAX_ASSERT_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= limit; attempt++) {
     try {
       const result = await withTimeout(
         agent.aiAssert(assertion, undefined, {
-          domIncluded: true,
+          domIncluded,
           // keepRawResponse is REQUIRED to receive the structured
           // { pass, thought, message } verdict. Without it aiAssert returns
           // undefined on a truthy assertion (and throws on a falsy one),
@@ -138,16 +165,40 @@ export async function aiAssertWithSelfHeal(
       );
 
       const pass = result?.pass ?? false;
-      lastThought = result?.thought ?? lastThought;
+      lastThought = assertionReason(result) ?? lastThought;
 
       if (pass) {
         return { pass: true, attempts: attempt, healed: attempt > 1, thought: lastThought };
       }
 
+      // Вердикту немає не через застосунок, а через розмір DOM — повторюємо
+      // без дерева і не тягнемо технічну помилку в дефект як «спостереження».
+      if (lastThought && isContextOverflow(lastThought)) {
+        if (domIncluded) {
+          console.warn(
+            `[self-heal] Assertion "${label}" не вмістилась у контекст моделі — повторюю без DOM`,
+          );
+          domIncluded = false;
+          limit = MAX_ASSERT_ATTEMPTS + 1;
+          lastThought = undefined;
+          continue;
+        }
+        // Навіть без DOM не влізло: перевірку неможливо оцінити. Класифікуємо як
+        // проблему моделі, а не як дефект застосунку — інакше в реєстрі зʼявився
+        // би баг там, де ми просто не змогли подивитись.
+        return {
+          pass: false,
+          attempts: attempt,
+          healed: false,
+          error: lastThought,
+          errorClass: 'model',
+        };
+      }
+
       // pass=false → likely an app defect. Re-evaluate once after waiting in case
       // the UI simply had not settled yet.
-      if (attempt < MAX_ASSERT_ATTEMPTS) {
-        options.onRetry?.(attempt, result?.thought ?? 'assertion not satisfied', 'assertion');
+      if (attempt < limit) {
+        options.onRetry?.(attempt, lastThought ?? 'assertion not satisfied', 'assertion');
         await agent
           .aiWaitFor('page is stable and ready for interaction', { timeoutMs: 8_000 })
           .catch(() => undefined);
@@ -169,7 +220,17 @@ export async function aiAssertWithSelfHeal(
         `[self-heal] Assertion "${label}" error [${cls}] (attempt ${attempt}/${MAX_ASSERT_ATTEMPTS}): ${errorMessage(error)}`,
       );
 
-      if (attempt === MAX_ASSERT_ATTEMPTS || isFatal(error) || !isHealable(cls)) {
+      // Та сама історія, коли модель повертає помилку викидом, а не вердиктом.
+      if (domIncluded && isContextOverflow(errorMessage(error))) {
+        console.warn(
+          `[self-heal] Assertion "${label}" не вмістилась у контекст моделі — повторюю без DOM`,
+        );
+        domIncluded = false;
+        limit = MAX_ASSERT_ATTEMPTS + 1;
+        continue;
+      }
+
+      if (attempt === limit || isFatal(error) || !isHealable(cls)) {
         return {
           pass: false,
           attempts: attempt,
@@ -184,7 +245,7 @@ export async function aiAssertWithSelfHeal(
 
   return {
     pass: false,
-    attempts: MAX_ASSERT_ATTEMPTS,
+    attempts: limit,
     healed: false,
     thought: lastThought,
     error: lastError ? errorMessage(lastError) : undefined,

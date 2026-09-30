@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
-import { getCacheId } from '../config/env.js';
+import { artifactNameCandidates, getCacheId, scenarioKey } from '../config/env.js';
 import {
   getGeneratedDir,
   getMidsceneCacheDir,
@@ -295,36 +295,55 @@ ${assertionBlock}
   };
 }
 
-async function readCacheFile(scenarioId: string): Promise<CacheFile | null> {
-  const cachePath = path.join(getMidsceneCacheDir(), `${getCacheId(scenarioId)}.cache.yaml`);
-  try {
-    const raw = await fs.readFile(cachePath, 'utf-8');
-    return parse(raw) as CacheFile;
-  } catch {
-    return null;
+/** Читає кеш за ключем, з fallback на стару (без хеша) назву кеш-файлу. */
+async function readCacheFile(scenarioId: string, targetUrl?: string): Promise<CacheFile | null> {
+  // `getCacheId` додає хеш сам, тож для старої назви беремо `jules-<name>` явно —
+  // інакше fallback-кандидат отримав би той самий хеш і дублював перший варіант.
+  const [key, legacy] = artifactNameCandidates(scenarioId, targetUrl);
+  const cacheIds = [getCacheId(key, targetUrl)];
+  if (legacy) cacheIds.push(`jules-${legacy}`);
+
+  for (const cacheId of cacheIds) {
+    try {
+      const raw = await fs.readFile(
+        path.join(getMidsceneCacheDir(), `${cacheId}.cache.yaml`),
+        'utf-8',
+      );
+      return parse(raw) as CacheFile;
+    } catch {
+      /* пробуємо наступного кандидата */
+    }
   }
+  return null;
 }
 
-async function readPlan(scenarioId: string): Promise<{ targetUrl?: string; assertions: string[] }> {
-  try {
-    const raw = await fs.readFile(path.join(getPlansDir(), `${scenarioId}.json`), 'utf-8');
-    const plan = JSON.parse(raw) as { targetUrl?: string; assertions?: string[] };
-    return { targetUrl: plan.targetUrl, assertions: plan.assertions ?? [] };
-  } catch {
-    return { assertions: [] };
+/** Читає план за ключем, з fallback на стару назву без хеша. */
+async function readPlan(
+  scenarioId: string,
+  targetUrl?: string,
+): Promise<{ targetUrl?: string; assertions: string[] }> {
+  for (const name of artifactNameCandidates(scenarioId, targetUrl)) {
+    try {
+      const raw = await fs.readFile(path.join(getPlansDir(), `${name}.json`), 'utf-8');
+      const plan = JSON.parse(raw) as { targetUrl?: string; assertions?: string[] };
+      return { targetUrl: plan.targetUrl, assertions: plan.assertions ?? [] };
+    } catch {
+      /* пробуємо наступного кандидата */
+    }
   }
+  return { assertions: [] };
 }
 
 export async function transpileScenario(
   scenarioId: string,
   opts?: { targetUrl?: string },
 ): Promise<TranspileResult | null> {
-  const cache = await readCacheFile(scenarioId);
+  const cache = await readCacheFile(scenarioId, opts?.targetUrl);
   if (!cache || !(cache.caches ?? []).some((c) => c.type === 'plan')) {
     return null;
   }
 
-  const plan = await readPlan(scenarioId);
+  const plan = await readPlan(scenarioId, opts?.targetUrl);
   const targetUrl = opts?.targetUrl ?? plan.targetUrl ?? process.env.QA_TARGET_URL ?? 'https://example.com';
 
   const generated = generateSpecCode({
@@ -336,7 +355,9 @@ export async function transpileScenario(
 
   const outDir = getGeneratedDir();
   await fs.mkdir(outDir, { recursive: true });
-  const specPath = path.join(outDir, `${scenarioId}.spec.ts`);
+  // Спека теж іде під ключем: одна назва сценарію на різних цілях більше не
+  // перезаписує сусідній детермінований спек.
+  const specPath = path.join(outDir, `${scenarioKey(scenarioId, targetUrl)}.spec.ts`);
   await fs.writeFile(specPath, generated.code, 'utf-8');
 
   return { specPath, ...generated };

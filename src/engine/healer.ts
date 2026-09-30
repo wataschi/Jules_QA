@@ -14,6 +14,23 @@ import type { BugReport } from './results.js';
  */
 export type ErrorClass = 'model' | 'selector' | 'timeout' | 'assertion' | 'unknown';
 
+/**
+ * Позначка в тексті помилки: цільовий сайт не відповів, тест ні до чого.
+ *
+ * У реальному прогоні два кейси впали лише тому, що сайт віддав 503/502 —
+ * і в реєстрі це виглядало як регресія застосунку. Такі падіння мають бути
+ * `blocked` («не виконувався»), а не `failed`.
+ */
+export const TARGET_UNAVAILABLE = 'TARGET_UNAVAILABLE';
+
+/** Падіння через середовище: ціль недоступна або взагалі не вирішується. */
+export function isEnvironmentFailure(message: string): boolean {
+  return (
+    message.includes(TARGET_UNAVAILABLE) ||
+    /net::ERR_(CONNECTION|NAME_NOT_RESOLVED|ADDRESS_UNREACHABLE|INTERNET_DISCONNECTED)/.test(message)
+  );
+}
+
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
@@ -54,6 +71,17 @@ export function classifyError(error: unknown): ErrorClass {
   return 'unknown';
 }
 
+/**
+ * Переповнення контексту моделі. На великих каталогах дерево доступності
+ * (`domIncluded: true`) саме по собі більше за вікно контексту, і перевірка
+ * не може дати вердикт узагалі — це не дефект застосунку, а наша вада.
+ */
+export function isContextOverflow(message: string): boolean {
+  return /message too long|context window|context length|context_length_exceeded|too many tokens|maximum context/i.test(
+    message,
+  );
+}
+
 /** Whether a failed action is worth retrying via relocation/wait. */
 export function isHealable(cls: ErrorClass): boolean {
   return cls === 'selector' || cls === 'timeout' || cls === 'model';
@@ -75,6 +103,8 @@ export function buildBugReport(input: {
   assertion: string;
   thought?: string;
   error?: string;
+  /** Номер кроку, після якого стояла проміжна перевірка (для чекпойнтів). */
+  checkpointAfterStep?: number;
 }): BugReport {
   const thought = input.thought ?? input.error;
   return {
@@ -82,23 +112,41 @@ export function buildBugReport(input: {
     assertion: input.assertion,
     thought,
     rootCauseHypothesis: hypothesize(input.assertion, thought),
-    severity: severityFor(input.assertion),
+    severity: severityFor(input.assertion, thought),
     detectedAt: new Date().toISOString(),
+    // Без пояснення від моделі вердикт нічим не підкріплений — не видаємо його
+    // за підтверджений баг. Прогін може знизити впевненість і далі, якщо
+    // наступні кроки цьому вердикту суперечать.
+    confidence: thought?.trim() ? 'confirmed' : 'unconfirmed',
+    ...(input.checkpointAfterStep !== undefined
+      ? { checkpointAfterStep: input.checkpointAfterStep }
+      : {}),
   };
 }
 
 function hypothesize(assertion: string, thought?: string): string {
-  const base = thought
-    ? `Модель спостерігала: "${thought.trim()}". `
-    : '';
+  const observation = thought?.trim();
+  if (!observation) {
+    // Порожнє пояснення — найчастіше збій самої перевірки (модель не побачила
+    // елемент, сторінка не догрузилась), а не регресія. Так і пишемо, замість
+    // впевненого вироку застосунку.
+    return (
+      `Перевірка «${assertion.trim()}» повернула «не пройдено» без пояснення від моделі. ` +
+      `Причина не встановлена: це може бути як дефект застосунку, так і хибне спрацювання перевірки ` +
+      `(елемент поза видимою частиною, сторінка не догрузилась, слабкий вердикт моделі). ` +
+      `Потрібне підтвердження людиною або повторний прогін.`
+    );
+  }
   return (
-    `${base}Очікуваний стан UI не підтверджено. Ймовірна причина: застосунок не відображає очікуваний результат ` +
-    `для перевірки «${assertion.trim()}» (регресія функціоналу, помилка даних або зміна поведінки). ` +
-    `Локатори елементів НЕ змінювалися автоматично — це класифіковано як дефект застосунку, а не тесту.`
+    `Модель спостерігала: "${observation}". Очікуваний стан UI не підтверджено для перевірки ` +
+    `«${assertion.trim()}». Ймовірні причини: регресія функціоналу, помилка даних або зміна поведінки. ` +
+    `Локатори елементів НЕ змінювалися автоматично — падіння не пояснюється самолікуванням тесту.`
   );
 }
 
-function severityFor(assertion: string): BugReport['severity'] {
+function severityFor(assertion: string, thought?: string): BugReport['severity'] {
+  // Вердикт без пояснення не тягне на високу критичність — спершу підтвердження.
+  if (!thought?.trim()) return 'low';
   const s = assertion.toLowerCase();
   if (/error|500|crash|payment|оплат|втрач|security|загроз|critical|критич/.test(s)) return 'high';
   if (/login|auth|checkout|submit|save|увійти|оформ|збереж/.test(s)) return 'high';
@@ -129,6 +177,11 @@ ${report.thought ?? '—'}
 
 ## Root-cause hypothesis
 ${report.rootCauseHypothesis}
+
+## Confidence
+${report.confidence === 'unconfirmed' ? 'unconfirmed — потребує підтвердження людиною' : 'confirmed'}${
+    report.contradictedBy ? `\n\nСуперечить вердикту: ${report.contradictedBy}` : ''
+  }
 `;
   await fs.writeFile(mdPath, md, 'utf-8');
 

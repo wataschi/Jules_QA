@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import dotenv from 'dotenv';
-import { getCacheId } from '../config/env.js';
+import { getCacheId, scenarioKey } from '../config/env.js';
 import { createAiTestFixture } from '../engine/fixture.js';
 import { closeStagehand, executeChecklist } from '../engine/hybrid-runner.js';
 import { flushCacheIfWarmUp, logCacheMode } from '../engine/self-heal.js';
-import { loadScenarioYaml, prepareChecklist } from '../planning/scenario-planner.js';
+import { loadScenarioYaml, prepareChecklist, scenarioHasSecrets } from '../planning/scenario-planner.js';
 
 dotenv.config();
 
@@ -89,19 +90,45 @@ async function main(): Promise<void> {
   process.env.QA_SCENARIO_PATH = scenarioPath;
   process.env.QA_MODE = args.mode;
 
+  // Справжній runId: раніше CLI не задавав QA_RUN_ID, тож `human:`-крок бачив
+  // runId === 'local' і лише друкував попередження замість того, щоб чекати
+  // оператора (файл контролю + Enter у TTY).
+  if (!process.env.QA_RUN_ID) {
+    process.env.QA_RUN_ID = randomUUID();
+  }
+  const runId = process.env.QA_RUN_ID;
+
   const scenario = await loadScenarioYaml(scenarioPath);
-  const checklist = await prepareChecklist(scenarioPath);
+  const targetUrl = scenario.target_url ?? process.env.QA_TARGET_URL ?? 'https://example.com';
+  const artifactKey = scenarioKey(scenario.name, targetUrl);
 
-  logCacheMode(args.mode, getCacheId(scenario.name));
-  console.log(`[qa] Running via Playwright: ${scenario.name}`);
-  console.log(`[qa] Goal: ${checklist.goal}`);
-  console.log(`[qa] Steps: ${checklist.steps.length}, Assertions: ${checklist.assertions.length}`);
+  if (scenarioHasSecrets(scenario)) {
+    process.env.QA_TRACE = 'off';
+    console.log('[qa] Сценарій зі секретами — QA_TRACE=off (трейс не пишеться, щоб пароль не потрапив у trace.zip)');
+  }
 
+  // Планування НЕ робимо тут: дочірній процес (e2e/ai-scenario.spec.ts) однаково
+  // викликає prepareChecklist, і раніше це давало два повних проходи
+  // planner+critic на один CLI-прогін. Тепер — рівно один.
+  logCacheMode(args.mode, getCacheId(scenario.name, targetUrl));
+  console.log(`[qa] Running via Playwright: ${scenario.name} (runId=${runId})`);
+  console.log(`[qa] Goal: ${scenario.goal}`);
+  console.log(
+    scenario.steps.length > 0
+      ? `[qa] Steps: ${scenario.steps.length}, Success criteria: ${scenario.success_criteria.length}`
+      : '[qa] Steps: план буде згенерований у дочірньому процесі (planner+critic, один раз)',
+  );
+
+  const startedAt = new Date().toISOString();
   const exitCode = await runPlaywrightTest(scenarioPath, args.mode);
 
-  if (exitCode === 0) {
+  // Звіт збираємо завжди — саме впалий прогін найбільше потребує доказів;
+  // `since` обмежує докази артефактами саме цього прогону.
+  try {
     const { aggregateReports } = await import('../reporting/aggregate-report.js');
-    await aggregateReports(scenario.name);
+    await aggregateReports(artifactKey, { since: startedAt });
+  } catch (error) {
+    console.warn('[qa] Збірка агрегованого звіту впала:', error instanceof Error ? error.message : error);
   }
 
   process.exit(exitCode);

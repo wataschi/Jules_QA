@@ -120,6 +120,59 @@ describe('self-heal', () => {
     expect(agent.aiAssert).toHaveBeenCalledTimes(2);
   });
 
+  it('aiAssertWithSelfHeal перепитує без DOM, коли сторінка не влазить у контекст', async () => {
+    // Реальний прогін: дерево доступності каталогу дало 39 804 токени проти
+    // вікна 32 768, тож перевірка не могла дати вердикт узагалі й сходила за
+    // «дефект застосунку». Друга спроба мусить іти без DOM.
+    const overflow = {
+      pass: false,
+      message:
+        'Assertion failed: caption\nReason: Error: failed to call AI model service: 400 Message too long: 39804 tokens exceeds the 32768-token context window.',
+    };
+    const aiAssert = vi
+      .fn()
+      .mockResolvedValueOnce(overflow)
+      .mockResolvedValue({ pass: true, thought: 'перелік наборів видно' });
+    const agent = mockAgent({ aiAssert });
+
+    const outcome = await aiAssertWithSelfHeal(agent as never, 'перелік наборів видно');
+
+    expect(outcome.pass).toBe(true);
+    expect(aiAssert.mock.calls[0]?.[2]).toMatchObject({ domIncluded: true });
+    expect(aiAssert.mock.calls[1]?.[2]).toMatchObject({ domIncluded: false });
+  });
+
+  it('aiAssertWithSelfHeal не тягне помилку переповнення в пояснення дефекту', async () => {
+    const overflow = {
+      pass: false,
+      message:
+        'Assertion failed: caption\nReason: 400 Message too long: 39804 tokens exceeds the 32768-token context window.',
+    };
+    const agent = mockAgent({ aiAssert: vi.fn().mockResolvedValue(overflow) });
+
+    const outcome = await aiAssertWithSelfHeal(agent as never, 'перелік наборів видно');
+
+    expect(outcome.pass).toBe(false);
+    // Технічна помилка транспорту — не «спостереження моделі» про застосунок.
+    expect(outcome.thought).toBeUndefined();
+    // Клас 'model', а не 'assertion': перевірку не оцінили, дефект не заводимо.
+    expect(outcome.errorClass).toBe('model');
+    expect(agent.aiAssert).toHaveBeenCalledTimes(2);
+  });
+
+  it('aiAssertWithSelfHeal перепитує без DOM і коли переповнення прилетіло викидом', async () => {
+    const aiAssert = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('400 Message too long: 40000 tokens exceeds the 32768-token context window'))
+      .mockResolvedValue({ pass: true, thought: 'видно' });
+    const agent = mockAgent({ aiAssert });
+
+    const outcome = await aiAssertWithSelfHeal(agent as never, 'перелік наборів видно');
+
+    expect(outcome.pass).toBe(true);
+    expect(aiAssert.mock.calls[1]?.[2]).toMatchObject({ domIncluded: false });
+  });
+
   it('aiAssertWithSelfHeal reports an app defect when the assertion is false', async () => {
     const agent = mockAgent({
       aiAssert: vi.fn().mockResolvedValue({ pass: false, thought: 'error banner shown' }),

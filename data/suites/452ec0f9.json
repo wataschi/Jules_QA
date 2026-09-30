@@ -1,0 +1,16 @@
+{
+  "id": "452ec0f9",
+  "name": "https://www.vyshnevskyi.online",
+  "description": "Протестуй доступність, наявність меню, підвантаження медіа та фонової анімації та інші деталі",
+  "scenarioPaths": [
+    "scenarios/verify-media-page-load-speed.yaml",
+    "scenarios/universal-search-or-interact.yaml",
+    "scenarios/universal-page-load.yaml",
+    "scenarios/universal-navigation.yaml",
+    "scenarios/universal-cookie-consent.yaml",
+    "scenarios/universal-accessibility-smoke.yaml"
+  ],
+  "stopOnFailure": true,
+  "createdAt": "2026-09-29T21:51:20.489Z",
+  "updatedAt": "2026-09-29T21:51:24.616Z"
+}

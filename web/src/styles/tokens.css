@@ -1,0 +1,197 @@
+/*
+ * Єдиний файл токенів дизайну Jules QA Registry.
+ * Тут — уся палітра, шкали відступів і тексту, радіуси, тіні, z-index.
+ * Компоненти не містять hex-кольорів напряму: тільки var(--…).
+ */
+
+:root {
+  /* ── шкала відступів ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* ── шкала тексту ── */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+
+  /* ── радіуси ── */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+
+  /* ── тіні ── */
+  --sh-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --sh-2: 0 4px 8px -2px rgba(16, 24, 40, 0.1), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --sh-3: 0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+
+  /* ── z-index ── */
+  --z-sticky: 20;
+  --z-drawer: 40;
+  --z-dialog: 60;
+  --z-toast: 80;
+
+  /* ── типографіка ── */
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  /* ── геометрія ── */
+  --row-h: 38px;
+  --sidebar-w: 232px;
+  --header-h: 56px;
+
+  /* ── світла палітра (за замовчуванням) ── */
+  color-scheme: light;
+
+  --bg: #f5f7fa;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --surface-3: #e3e8f0;
+  --surface-hover: #f0f3f8;
+
+  --border: #d3dae5;
+  --border-strong: #b2bdcd;
+
+  --text: #121822;
+  --text-2: #4a5566;
+  --text-3: #6e7a8c;
+  --text-inverse: #ffffff;
+
+  --accent: #1f55c8;
+  --accent-hover: #17459f;
+  --accent-soft: #e6edfb;
+  --accent-border: #b9cdf4;
+  --accent-text: #ffffff;
+
+  --good: #15704a;
+  --good-soft: #e2f2ea;
+  --good-border: #a9d6c0;
+
+  --warn: #8a5a06;
+  --warn-soft: #fbf1da;
+  --warn-border: #e5cb92;
+
+  --bad: #ae3326;
+  --bad-soft: #fbe7e4;
+  --bad-border: #eeb3ab;
+
+  --neutral-chip: #eef1f6;
+  --neutral-chip-text: #4a5566;
+  --neutral-chip-border: #d3dae5;
+
+  --focus-ring: #1f55c8;
+  --overlay: rgba(18, 24, 34, 0.42);
+  --code-bg: #eef1f6;
+  --grid-line: #e6eaf1;
+}
+
+/* ── темна палітра: системна, з guard для ручного світлого вибору ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #0e131b;
+    --bg-elevated: #151c26;
+    --surface: #151c26;
+    --surface-2: #1c2531;
+    --surface-3: #26313f;
+    --surface-hover: #1f2937;
+
+    --border: #2e3a49;
+    --border-strong: #435264;
+
+    --text: #e8edf5;
+    --text-2: #a7b4c6;
+    --text-3: #7e8ca0;
+    --text-inverse: #0b1220;
+
+    --accent: #6fa0ff;
+    --accent-hover: #93b8ff;
+    --accent-soft: #1a2740;
+    --accent-border: #33507f;
+    --accent-text: #0b1220;
+
+    --good: #58c294;
+    --good-soft: #10261e;
+    --good-border: #235c46;
+
+    --warn: #e2ab44;
+    --warn-soft: #2a2213;
+    --warn-border: #5c4820;
+
+    --bad: #f08a7c;
+    --bad-soft: #2f1a18;
+    --bad-border: #6d332c;
+
+    --neutral-chip: #1c2531;
+    --neutral-chip-text: #a7b4c6;
+    --neutral-chip-border: #2e3a49;
+
+    --focus-ring: #6fa0ff;
+    --overlay: rgba(4, 7, 12, 0.6);
+    --code-bg: #1c2531;
+    --grid-line: #232d3a;
+
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --sh-2: 0 4px 10px rgba(0, 0, 0, 0.5);
+    --sh-3: 0 14px 22px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* ── темна палітра: ручний вибір ── */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0e131b;
+  --bg-elevated: #151c26;
+  --surface: #151c26;
+  --surface-2: #1c2531;
+  --surface-3: #26313f;
+  --surface-hover: #1f2937;
+
+  --border: #2e3a49;
+  --border-strong: #435264;
+
+  --text: #e8edf5;
+  --text-2: #a7b4c6;
+  --text-3: #7e8ca0;
+  --text-inverse: #0b1220;
+
+  --accent: #6fa0ff;
+  --accent-hover: #93b8ff;
+  --accent-soft: #1a2740;
+  --accent-border: #33507f;
+  --accent-text: #0b1220;
+
+  --good: #58c294;
+  --good-soft: #10261e;
+  --good-border: #235c46;
+
+  --warn: #e2ab44;
+  --warn-soft: #2a2213;
+  --warn-border: #5c4820;
+
+  --bad: #f08a7c;
+  --bad-soft: #2f1a18;
+  --bad-border: #6d332c;
+
+  --neutral-chip: #1c2531;
+  --neutral-chip-text: #a7b4c6;
+  --neutral-chip-border: #2e3a49;
+
+  --focus-ring: #6fa0ff;
+  --overlay: rgba(4, 7, 12, 0.6);
+  --code-bg: #1c2531;
+  --grid-line: #232d3a;
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --sh-2: 0 4px 10px rgba(0, 0, 0, 0.5);
+  --sh-3: 0 14px 22px rgba(0, 0, 0, 0.55);
+}

@@ -97,11 +97,34 @@ export function parseJsonFromLlm(content: string): unknown {
   return JSON.parse(jsonStr);
 }
 
+export interface ModelUsage {
+  promptTokens: number;
+  completionTokens: number;
+  model: string;
+  durationMs: number;
+}
+
+export interface ChatJsonResult {
+  value: unknown;
+  usage: ModelUsage;
+}
+
 /**
  * Calls a chat model for a JSON object response. Retries once without
  * `response_format` for backends (e.g. some local models) that reject json mode.
+ *
+ * Сигнатура свідомо незмінна (від неї залежить решта коду) — для видимості
+ * вартості використовуйте {@link chatJsonWithUsage}.
  */
 export async function chatJson(options: ChatJsonOptions): Promise<unknown> {
+  return (await chatJsonWithUsage(options)).value;
+}
+
+/**
+ * Те саме, що {@link chatJson}, але повертає ще й облік токенів/часу — це дає
+ * видимість вартості кожного виклику planner/critic.
+ */
+export async function chatJsonWithUsage(options: ChatJsonOptions): Promise<ChatJsonResult> {
   const model = resolveModel(options.role ?? 'planning');
   if (!model.baseUrl) {
     throw new Error('LLM не налаштовано. Вкажіть MIDSCENE_MODEL_BASE_URL у .env');
@@ -132,6 +155,7 @@ export async function chatJson(options: ChatJsonOptions): Promise<unknown> {
   }
 
   let lastError = '';
+  const startedAt = Date.now();
   for (const body of attempts) {
     const response = await fetch(url, {
       method: 'POST',
@@ -155,14 +179,23 @@ export async function chatJson(options: ChatJsonOptions): Promise<unknown> {
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      model?: string;
     };
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
       throw new Error('Порожня відповідь LLM');
     }
 
+    const usage: ModelUsage = {
+      promptTokens: data.usage?.prompt_tokens ?? 0,
+      completionTokens: data.usage?.completion_tokens ?? 0,
+      model: data.model ?? model.name,
+      durationMs: Date.now() - startedAt,
+    };
+
     try {
-      return parseJsonFromLlm(stripThinkingArtifacts(content));
+      return { value: parseJsonFromLlm(stripThinkingArtifacts(content)), usage };
     } catch {
       throw new Error('LLM повернув невалідний JSON. Спробуйте іншу модель або коротший запит.');
     }

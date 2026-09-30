@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import { getRunsDir } from './data-paths.js';
 import { redactText } from '../security/redact.js';
@@ -40,6 +41,21 @@ export async function getRun(id: string): Promise<RunRecord | null> {
   return readRunWithRetry(id);
 }
 
+/**
+ * Синхронна перевірка існування прогону.
+ *
+ * Потрібна `cancelRun`, який мусить лишитися синхронним (роут у `server/index.ts`
+ * віддає його результат напряму в JSON), але тепер має відповідати `false` на
+ * невідомий ID замість беззастережного `true`.
+ */
+export function runExistsSync(id: string): boolean {
+  try {
+    return fsSync.existsSync(runFilePath(id));
+  } catch {
+    return false;
+  }
+}
+
 export async function listRuns(limit = 50): Promise<RunRecord[]> {
   await ensureRunsDir();
   const files = await fs.readdir(runsDir());
@@ -70,7 +86,19 @@ export async function appendRunLog(id: string, line: string): Promise<void> {
 
 export async function updateRunStatus(
   id: string,
-  patch: Partial<Pick<RunRecord, 'status' | 'finishedAt' | 'exitCode' | 'errorSummary' | 'reportPaths' | 'scenarioName' | 'hitlReason'>>,
+  patch: Partial<
+    Pick<
+      RunRecord,
+      | 'status'
+      | 'startedAt'
+      | 'finishedAt'
+      | 'exitCode'
+      | 'errorSummary'
+      | 'reportPaths'
+      | 'scenarioName'
+      | 'hitlReason'
+    >
+  >,
 ): Promise<RunRecord | null> {
   return withRunWriteLock(id, async () => {
     const run = await readRunUnsafe(id);

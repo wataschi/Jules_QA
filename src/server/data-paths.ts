@@ -16,6 +16,14 @@ export function getSuitesDir(): string {
   return path.join(getDataRoot(), 'suites');
 }
 
+/**
+ * Файл SQLite-бази реєстру тест-кейсів.
+ * `REGISTRY_DB` перекриває шлях (потрібно тестам — тимчасова база на тест).
+ */
+export function getRegistryDbPath(): string {
+  return process.env.REGISTRY_DB ?? path.join(getDataRoot(), 'registry.db');
+}
+
 export function getScenariosDir(): string {
   return process.env.SCENARIOS_ROOT ?? path.join(process.cwd(), 'scenarios');
 }

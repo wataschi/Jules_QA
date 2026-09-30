@@ -2,6 +2,10 @@ FROM mcr.microsoft.com/playwright:v1.61.0-noble
 
 WORKDIR /app
 
+# Реєстр тест-кейсів працює на вбудованому node:sqlite, тому потрібен Node 22+.
+# Перевіряємо на етапі збірки, щоб не отримати незрозумілу помилку в рантаймі.
+RUN node -e "const major = Number(process.versions.node.split('.')[0]); if (major < 22) { console.error('Потрібен Node 22+ (node:sqlite), а в образі ' + process.versions.node + '. Візьміть новіший тег playwright або власний образ на node:24.'); process.exit(1); } console.log('Node ' + process.versions.node + ' — ok');"
+
 COPY package.json package-lock.json ./
 COPY scripts/patch-midscene-sleep.mjs scripts/patch-midscene-extractor.mjs ./scripts/
 RUN npm ci

@@ -3,7 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Jules AI QA</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Jules — реєстр тест-кейсів</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    />
+    <script>
+      // Тема застосовується до першого рендеру, щоб не блимало світлим.
+      try {
+        var t = localStorage.getItem('julesTheme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {
+        /* localStorage може бути заблокований — це не критично */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

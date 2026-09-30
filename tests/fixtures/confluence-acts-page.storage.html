@@ -1,0 +1,51 @@
+<h1>Акти виконаних робіт</h1>
+<p>Розділ описує роботу з актами в карті договору&nbsp;&laquo;Кібер&raquo;.</p>
+<ac:structured-macro ac:name="toc" ac:schema-version="1" ac:macro-id="a1b2">
+  <ac:parameter ac:name="maxLevel">3</ac:parameter>
+  <ac:parameter ac:name="style">disc</ac:parameter>
+</ac:structured-macro>
+<h2>Створення акта</h2>
+<p>Користувач з роллю <strong>Менеджер</strong> може створити акт із карти договору.
+Кнопка &laquo;Створити акт&raquo; доступна лише для договорів у статусі <em>Активний</em>.</p>
+<ul>
+  <li>Поле &laquo;Сума&raquo; обов'язкове.</li>
+  <li>Дата акта не може бути в майбутньому.</li>
+  <li>Номер акта унікальний у межах договору &amp; року.</li>
+</ul>
+<ac:structured-macro ac:name="info" ac:schema-version="1" ac:macro-id="c3d4">
+  <ac:rich-text-body>
+    <p>Акт без суми не зберігається: форма показує помилку під полем &laquo;Сума&raquo;.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<ac:structured-macro ac:name="children" ac:schema-version="1" ac:macro-id="e5f6" />
+<h3>Поля форми акта</h3>
+<table>
+  <colgroup><col /><col /><col /></colgroup>
+  <tbody>
+    <tr>
+      <th>Поле</th>
+      <th>Обов'язкове</th>
+      <th>Правило</th>
+    </tr>
+    <tr>
+      <td>Номер</td>
+      <td>так</td>
+      <td>до 20 символів, латиниця та цифри</td>
+    </tr>
+    <tr>
+      <td>Сума</td>
+      <td>так</td>
+      <td>більше 0, не більше 2 знаків після коми</td>
+    </tr>
+    <tr>
+      <td>Коментар</td>
+      <td>ні</td>
+      <td>до 500 символів</td>
+    </tr>
+  </tbody>
+</table>
+<h4>Порожній підрозділ</h4>
+<h2>Видалення акта</h2>
+<p>Акт можна прибрати з договору лише у статусі &laquo;Чернетка&raquo;.
+Для підписаного акта кнопка недоступна, а спроба прямого переходу за URL повертає 403.</p>
+<p><ac:image ac:align="center"><ri:attachment ri:filename="acts-form.png" /></ac:image></p>

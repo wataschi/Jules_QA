@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetEnvCache } from '../../../src/config/env.js';
+import { resetEnvCache, scenarioKey } from '../../../src/config/env.js';
 import {
   loadChecklist,
   loadScenarioYaml,
@@ -193,7 +193,13 @@ describe('scenario-planner', () => {
     const full = path.join(ws.scenariosDir, 'prep.yaml');
     const checklist = await prepareChecklist(full);
     expect(checklist.scenarioId).toBe('prep-scenario');
-    const planPath = path.join(ws.midsceneDir, 'plans', 'prep-scenario.json');
+    // План пишеться під ключем `<name>--<hash8(targetUrl)>`, щоб один і той самий
+    // сценарій на різних цілях не перезаписував чужий план.
+    const planPath = path.join(
+      ws.midsceneDir,
+      'plans',
+      `${scenarioKey('prep-scenario', 'https://example.com')}.json`,
+    );
     const raw = await fs.readFile(planPath, 'utf-8');
     expect(JSON.parse(raw).steps).toContain('Navigate');
   });

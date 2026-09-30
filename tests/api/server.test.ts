@@ -279,6 +279,11 @@ describe('REST API', () => {
   });
 
   it('GET /api/llm/check with mock fetch', async () => {
+    // Хост мусить бути в allowlist (src/server/auth.ts): інакше запит із ключем
+    // моделі нікуди не піде — це свідомий захист від витоку MIDSCENE_MODEL_API_KEY.
+    const previousBase = process.env.MIDSCENE_MODEL_BASE_URL;
+    process.env.MIDSCENE_MODEL_BASE_URL = 'http://mock-llm/v1';
+
     await request(app)
       .put('/api/settings')
       .send({
@@ -298,6 +303,31 @@ describe('REST API', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.models).toContain('model-a');
+
+    if (previousBase === undefined) delete process.env.MIDSCENE_MODEL_BASE_URL;
+    else process.env.MIDSCENE_MODEL_BASE_URL = previousBase;
+  });
+
+  it('GET /api/llm/check відмовляє на хості поза allowlist', async () => {
+    const previousBase = process.env.MIDSCENE_MODEL_BASE_URL;
+    process.env.MIDSCENE_MODEL_BASE_URL = 'http://allowed-llm/v1';
+
+    await request(app)
+      .put('/api/settings')
+      .send({
+        qaTargetUrl: 'https://example.com',
+        qaMode: 'warm-up',
+        qaScenarioPath: 'scenarios/api-test.yaml',
+        debugCache: false,
+        llmBaseUrl: 'https://evil.example.com/v1',
+      });
+
+    const res = await request(app).get('/api/llm/check');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('allowlist');
+
+    if (previousBase === undefined) delete process.env.MIDSCENE_MODEL_BASE_URL;
+    else process.env.MIDSCENE_MODEL_BASE_URL = previousBase;
   });
 
   it('GET /api/llm/check returns 400 when URL not configured', async () => {

@@ -129,6 +129,108 @@ export function normalizeImageDataUris(node: unknown): boolean {
 /** @deprecated Back-compat alias; use {@link normalizeImageDataUris}. */
 export const rewriteImageDataUris = normalizeImageDataUris;
 
+/* ─────────────────────────── Лічильник викликів моделі ───────────────────────
+ * Питання «чи справді regression іде без LLM» до цього не мало відповіді. Тут
+ * живе єдиний лічильник `/chat/completions`-запитів: проксі інкрементує його для
+ * всього, що йде через нього, а `installModelCallCounter()` додатково перехоплює
+ * глобальний fetch — це потрібно тому, що проксі стартує в runner-процесі
+ * Playwright (global-setup), а сам рушій крокує у worker-процесі, тож без хука
+ * лічильник у воркері завжди лишався б нулем.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+let modelCallCount = 0;
+
+/** Інкрементує лічильник викликів моделі (один HTTP-запит = один виклик). */
+/** Шлях, за яким проксі віддає лічильник викликів моделі. */
+export const METRICS_PATH = '/__jules/metrics';
+
+/** Адреса лічильника, якщо рушій ходить до моделі через локальний проксі. */
+export function proxyMetricsUrl(): string | null {
+  const candidates = [
+    process.env.MIDSCENE_OPENAI_BASE_URL,
+    process.env.MIDSCENE_VQA_BASE_URL,
+    process.env.MIDSCENE_MODEL_BASE_URL,
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    try {
+      const url = new URL(raw);
+      if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') {
+        return `${url.origin}${METRICS_PATH}`;
+      }
+    } catch {
+      /* некоректний URL — пробуємо наступний */
+    }
+  }
+  return null;
+}
+
+/** Поточний лічильник проксі або `null`, якщо проксі недоступний. */
+export async function readProxyModelCalls(): Promise<number | null> {
+  const url = proxyMetricsUrl();
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(1500) });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { calls?: number };
+    return typeof data.calls === 'number' ? data.calls : null;
+  } catch {
+    return null;
+  }
+}
+
+export function countModelCall(): void {
+  modelCallCount++;
+}
+
+export function getModelCallCount(): number {
+  return modelCallCount;
+}
+
+export function resetModelCallCount(): void {
+  modelCallCount = 0;
+}
+
+/** Знімає поточне значення та скидає лічильник (для міток «за крок»). */
+export function takeModelCallCount(): number {
+  const value = modelCallCount;
+  modelCallCount = 0;
+  return value;
+}
+
+const CHAT_COMPLETIONS_RE = /\/chat\/completions(?:\?|$)/;
+
+let fetchHookInstalled = false;
+
+function requestUrl(input: unknown): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  if (input && typeof input === 'object' && 'url' in input) {
+    return String((input as { url: unknown }).url);
+  }
+  return '';
+}
+
+/**
+ * Одноразово обгортає `globalThis.fetch`, щоб рахувати виклики моделі в тому
+ * процесі, де крокує рушій. Повертає `true`, якщо хук справді встановлено.
+ */
+export function installModelCallCounter(): boolean {
+  if (fetchHookInstalled) return true;
+  const original = globalThis.fetch;
+  if (typeof original !== 'function') return false;
+
+  globalThis.fetch = ((input: Parameters<typeof original>[0], init?: Parameters<typeof original>[1]) => {
+    if (CHAT_COMPLETIONS_RE.test(requestUrl(input))) {
+      countModelCall();
+    }
+    return original(input, init);
+  }) as typeof original;
+
+  fetchHookInstalled = true;
+  return true;
+}
+
 function buildLocalUrl(port: number, basePath: string): string {
   return `http://127.0.0.1:${port}${basePath}`;
 }
@@ -147,6 +249,14 @@ export async function startLmStudioProxy(opts: {
   const desiredPort = opts.port ?? 0;
 
   const server = http.createServer((req, res) => {
+    // Лічильник викликів моделі читає інший процес: рушій крокує у воркері
+    // Playwright, а проксі живе в процесі раннера.
+    if (req.method === 'GET' && (req.url ?? '').startsWith(METRICS_PATH)) {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ calls: getModelCallCount() }));
+      return;
+    }
     void forward(req, res, upstream).catch((error) => {
       if (!res.headersSent) {
         res.statusCode = 502;
@@ -200,6 +310,12 @@ async function forward(
 
   const reqUrl = req.url ?? '';
   const isChat = req.method === 'POST' && /\/chat\/completions$/.test(reqUrl);
+
+  // Проксі — єдина точка, через яку проходить увесь трафік до моделі, тому рахуємо тут завжди.
+  // Подвійного обліку немає: fetch-хук ставиться лише у воркері, а проксі живе в раннері.
+  if (isChat) {
+    countModelCall();
+  }
 
   if (isChat && body.length > 0) {
     try {

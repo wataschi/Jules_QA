@@ -1,101 +1,144 @@
-import { useEffect, useMemo, useState } from 'react';
+/** Список прогонів — ручні й автоматичні в одній історії, з фільтрами в адресі. */
+
 import { Link } from 'react-router-dom';
-import { api, formatDate, modeLabel, runTypeLabel, type RunSummary } from '../api';
-import PageHeader from '../components/PageHeader';
-import StatusBadge from '../components/StatusBadge';
+import { api } from '../api';
+import { Async } from '../components/states';
+import { Chip, Pager, PageHead, RunStateChip, SelectField, SummaryBar } from '../components/ui';
+import { useApp } from '../context/AppContext';
+import { useResource } from '../hooks/useAsync';
+import { useQueryParams } from '../hooks/useQueryParams';
+import { S, runKindLabel, runStateLabel } from '../strings';
+import type { RunKind, RunState } from '../types';
+import { RUN_KINDS, RUN_STATES } from '../types';
+import { formatAgo, formatDateTime, formatPercent } from '../utils/format';
+
+const LIMIT = 25;
 
 export default function RunsPage() {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [search, setSearch] = useState('');
+  const { projectId } = useApp();
+  const params = useQueryParams();
 
-  useEffect(() => {
-    const load = () => api.getRuns().then(setRuns).catch((e) => setError(String(e)));
-    load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
-  }, []);
+  const kind = params.get('kind');
+  const state = params.get('state');
+  const page = params.getNum('page', 1);
 
-  const filtered = useMemo(() => {
-    return runs
-      .filter((r) => r.runType !== 'suite-step')
-      .filter((r) => statusFilter === 'all' || r.status === statusFilter)
-      .filter((r) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return (
-          r.qaTargetUrl.toLowerCase().includes(q) ||
-          (r.scenarioName ?? '').toLowerCase().includes(q) ||
-          r.id.includes(q)
-        );
-      });
-  }, [runs, statusFilter, search]);
+  const listState = useResource(
+    (signal) =>
+      api.listRuns(
+        {
+          projectId,
+          kind: (kind || undefined) as RunKind | undefined,
+          state: (state || undefined) as RunState | undefined,
+          page,
+          limit: LIMIT,
+        },
+        signal,
+      ),
+    [projectId, kind, state, page],
+    { enabled: Boolean(projectId), pollMs: 20_000 },
+  );
 
   return (
     <>
-      <PageHeader title="Прогони" subtitle="Історія, фільтрація та моніторинг усіх test runs" />
+      <PageHead
+        title={S.runs.title}
+        sub={S.runs.sub}
+        actions={
+          <Link className="btn btn-primary btn-sm" to="/cases">
+            {S.cases.bulkCreateRun}
+          </Link>
+        }
+      />
 
-      {error && <div className="alert alert-err">{error}</div>}
-
-      <div className="card">
-        <div className="filters-bar">
-          <input
-            type="search"
-            placeholder="Пошук за URL, сценарієм, ID…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+      <section className="card">
+        <div className="filters">
+          <SelectField
+            label={S.runs.filterKind}
+            value={kind}
+            onChange={(next) => params.set({ kind: next || null, page: null })}
+            options={RUN_KINDS.map((value) => ({ value, label: runKindLabel[value] }))}
+            allLabel={S.common.all}
           />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">Усі статуси</option>
-            <option value="passed">Успішно</option>
-            <option value="failed">Помилка</option>
-            <option value="running">Виконується</option>
-            <option value="queued">У черзі</option>
-            <option value="cancelled">Скасовано</option>
-          </select>
+          <SelectField
+            label={S.runs.filterState}
+            value={state}
+            onChange={(next) => params.set({ state: next || null, page: null })}
+            options={RUN_STATES.map((value) => ({ value, label: runStateLabel[value] }))}
+            allLabel={S.common.all}
+          />
         </div>
 
-        <p className="muted filter-count">{filtered.length} прогонів</p>
-
-        {filtered.length === 0 ? (
-          <p className="muted">Немає прогонів за обраними фільтрами.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Статус</th>
-                <th>Тип</th>
-                <th>Сайт</th>
-                <th>Сценарій / набір</th>
-                <th>Режим</th>
-                <th>Логи</th>
-                <th>Час</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((run) => (
-                <tr key={run.id}>
-                  <td><StatusBadge status={run.status} /></td>
-                  <td>{runTypeLabel(run.runType)}</td>
-                  <td className="cell-ellipsis" title={run.qaTargetUrl}>{run.qaTargetUrl}</td>
-                  <td>
-                    {run.scenarioName ?? run.qaScenarioPath}
-                    {run.runType === 'suite' && run.totalSteps ? ` (${run.totalSteps})` : ''}
-                  </td>
-                  <td>{modeLabel(run.qaMode)}</td>
-                  <td>{run.logCount}</td>
-                  <td>{formatDate(run.startedAt)}</td>
-                  <td>
-                    <Link to={`/runs/${run.id}`}>{run.active ? 'Live →' : 'Деталі'}</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        <Async
+          state={listState}
+          skeletonRows={6}
+          empty={{
+            title: S.empty.runs,
+            hint: S.empty.runsHint,
+            action: (
+              <Link className="btn btn-sm" to="/cases">
+                {S.dashboard.goCases}
+              </Link>
+            ),
+          }}
+        >
+          {(data) => (
+            <>
+              <div className="table-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th scope="col">{S.runs.colTitle}</th>
+                      <th scope="col">{S.runs.colKind}</th>
+                      <th scope="col">{S.runs.colState}</th>
+                      <th scope="col">{S.runs.colProgress}</th>
+                      <th scope="col">{S.runs.colSummary}</th>
+                      <th scope="col">{S.runs.colStarted}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.items.map((run) => {
+                      const done = run.summary.total - run.summary.untested;
+                      const passRate = done > 0 ? run.summary.passed / done : null;
+                      return (
+                        <tr key={run.id}>
+                          <td>
+                            <Link to={`/runs/${encodeURIComponent(run.id)}`}>{run.title}</Link>
+                            {run.env.label && <span className="tag" style={{ marginLeft: 6 }}>{run.env.label}</span>}
+                          </td>
+                          <td>{runKindLabel[run.kind]}</td>
+                          <td>
+                            <RunStateChip state={run.state} />
+                          </td>
+                          <td style={{ minWidth: 120 }}>
+                            <SummaryBar summary={run.summary} />
+                            <span className="mono text-xs muted">
+                              {done} / {run.summary.total}
+                            </span>
+                          </td>
+                          <td className="nowrap">
+                            <Chip tone={passRate === null ? 'neutral' : passRate >= 0.9 ? 'good' : passRate >= 0.7 ? 'warn' : 'bad'} mono>
+                              {formatPercent(passRate)}
+                            </Chip>
+                          </td>
+                          <td className="nowrap text-xs muted" title={formatDateTime(run.startedAt)}>
+                            {formatAgo(run.startedAt)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <Pager
+                page={data.page || page}
+                limit={data.limit || LIMIT}
+                total={data.total}
+                onPage={(next) => params.set({ page: next === 1 ? null : next })}
+              />
+            </>
+          )}
+        </Async>
+      </section>
     </>
   );
 }

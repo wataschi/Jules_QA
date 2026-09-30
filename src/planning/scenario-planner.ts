@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { getEnv } from '../config/env.js';
+import { artifactNameCandidates, getEnv, scenarioKey, setActiveTargetUrl } from '../config/env.js';
 import { chatJson, resolveModel } from '../config/models.js';
 import { getPlansDir } from '../server/data-paths.js';
 import { checklistSchema, type Checklist, type ScenarioYaml } from './types.js';
@@ -174,30 +174,76 @@ function buildFallbackChecklist(scenario: ScenarioYaml, targetUrl: string): Chec
   };
 }
 
+/** Пише `plans/<scenarioKey>.json` — план прив'язаний до пари «сценарій+ціль». */
 export async function saveChecklist(checklist: Checklist): Promise<string> {
   const dir = getPlansDir();
   await fs.mkdir(dir, { recursive: true });
-  const filePath = path.join(dir, `${checklist.scenarioId}.json`);
+  const key = scenarioKey(checklist.scenarioId, checklist.targetUrl);
+  const filePath = path.join(dir, `${key}.json`);
   await fs.writeFile(filePath, JSON.stringify(checklist, null, 2), 'utf-8');
   return filePath;
 }
 
-export async function loadChecklist(scenarioId: string): Promise<Checklist | null> {
-  const filePath = path.join(getPlansDir(), `${scenarioId}.json`);
-  try {
-    const raw = await fs.readFile(filePath, 'utf-8');
-    return checklistSchema.parse(JSON.parse(raw));
-  } catch {
-    return null;
+/** Читає план за ключем, з fallback на стару назву без хеша. */
+export async function loadChecklist(
+  scenarioIdOrKey: string,
+  targetUrl?: string,
+): Promise<Checklist | null> {
+  for (const name of artifactNameCandidates(scenarioIdOrKey, targetUrl)) {
+    try {
+      const raw = await fs.readFile(path.join(getPlansDir(), `${name}.json`), 'utf-8');
+      return checklistSchema.parse(JSON.parse(raw));
+    } catch {
+      /* пробуємо наступного кандидата */
+    }
   }
+  return null;
+}
+
+/**
+ * Ефективна ціль сценарію — єдине джерело істини для ключа артефактів.
+ *
+ * `QA_TARGET_PINNED=1` означає, що ціль явно задав виклик (env прогону реєстру
+ * або поле форми): тоді вона перекриває `target_url` сценарію, інакше прогін
+ * «на стейджі» все одно йшов туди, де сценарій колись народився, а ключ
+ * артефактів у сервера й воркера розходився.
+ */
+export function resolveScenarioTargetUrl(scenario: ScenarioYaml): string {
+  if (process.env.QA_TARGET_PINNED === '1') return getEnv().QA_TARGET_URL;
+  return scenario.target_url ?? getEnv().QA_TARGET_URL;
+}
+
+const SECRET_STEP_RE = /^\s*secret:/i;
+const HUMAN_STEP_RE = /^\s*human:/i;
+
+/**
+ * Чи задіює сценарій секрети (крок `secret:` або профіль автентифікації).
+ *
+ * Такі прогони запускаються з QA_TRACE='off'. Свідомий компроміс:
+ * `src/engine/secret-type.ts` вводить пароль через `page.keyboard.type`, а
+ * Playwright-трейс зберігає ввід з клавіатури — значення потрапило б у
+ * `trace.zip`, який сервер роздає по HTTP. Для сценаріїв зі секретами трейс
+ * вимкнений; доказами лишаються відео, скриншоти та evidence-pack.
+ */
+export function scenarioHasSecrets(scenario: ScenarioYaml): boolean {
+  if (scenario.auth?.profile) return true;
+  return scenario.steps.some((step) => SECRET_STEP_RE.test(step));
+}
+
+/** Чи потребує сценарій видимого браузера (пауза оператора або автентифікація). */
+export function scenarioNeedsHeaded(scenario: ScenarioYaml): boolean {
+  if (scenario.auth?.profile) return true;
+  return scenario.steps.some((step) => HUMAN_STEP_RE.test(step));
 }
 
 export async function prepareChecklist(scenarioPath: string): Promise<Checklist> {
-  const env = getEnv();
   const scenario = await loadScenarioYaml(scenarioPath);
-  const targetUrl = scenario.target_url ?? env.QA_TARGET_URL;
+  const targetUrl = resolveScenarioTargetUrl(scenario);
+  // Фіксуємо ціль для всього процесу, щоб cacheId у Playwright-фікстурі (де є
+  // лише назва сценарію) дав той самий ключ, що й plans/results/aggregate.
+  setActiveTargetUrl(targetUrl);
 
-  const existing = await loadChecklist(scenario.name);
+  const existing = await loadChecklist(scenario.name, targetUrl);
   if (existing && isRegressionMode()) {
     return existing;
   }

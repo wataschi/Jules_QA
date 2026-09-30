@@ -11,8 +11,9 @@
     "test:regression": "cross-env QA_MODE=regression playwright test",
     "report:aggregate": "tsx src/reporting/aggregate-report.ts",
     "qa:transpile": "tsx src/codegen/transpile.ts",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/patch-midscene-sleep.mjs && node scripts/patch-midscene-extractor.mjs",
+    "typecheck": "tsc --noEmit && npm run typecheck:web",
+    "typecheck:web": "tsc --noEmit -p web/tsconfig.json",
+    "postinstall": "node scripts/patch-midscene-sleep.mjs && node scripts/patch-midscene-extractor.mjs && node scripts/patch-midscene-screenshot.mjs",
     "test:unit": "vitest run tests/unit",
     "test:api": "vitest run tests/api",
     "test:fast": "vitest run tests/unit tests/api",
@@ -23,6 +24,8 @@
     "test:docker:llm": "docker compose exec qa npm run test:llm",
     "test:docker:ui": "docker compose exec qa npm run test:ui",
     "vault": "tsx scripts/vault.ts",
+    "registry:migrate": "tsx scripts/registry-migrate.ts",
+    "test:registry": "vitest run tests/unit/registry tests/api/registry.test.ts",
     "ui:build": "npm --prefix web install --include=dev && npm --prefix web run build",
     "ui:start": "tsx src/server/start.ts",
     "ui:dev:server": "tsx src/server/start.ts",
@@ -42,10 +45,12 @@
     "docker:warm-up": "docker compose run --rm qa npm run qa -- --scenario scenarios/invalid-password.yaml --mode warm-up",
     "docker:regression": "docker compose run --rm qa npm run qa -- --scenario scenarios/invalid-password.yaml --mode regression",
     "docker:report": "docker compose run --rm qa npm run report:aggregate -- invalid-password-registration",
-    "docker:gpu:up": "docker compose --profile gpu up -d vllm"
+    "docker:gpu:up": "docker compose --profile gpu up -d vllm",
+    "registry:smoke": "tsx scripts/smoke-registry.ts",
+    "registry:analyze": "tsx scripts/analyze-run.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "^3.0.0",
