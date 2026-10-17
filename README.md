@@ -205,7 +205,8 @@ npm run typecheck
 ```
 
 API реєстру описаний у [`docs/registry-api.md`](docs/registry-api.md), межі шарів — у
-[`docs/module-contracts.md`](docs/module-contracts.md).
+[`docs/module-contracts.md`](docs/module-contracts.md). План переходу до моделі «QA направляє,
+агент робить» — у [`docs/agent-driven-qa-plan.md`](docs/agent-driven-qa-plan.md).
 
 ---
 
