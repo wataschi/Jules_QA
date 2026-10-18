@@ -49,15 +49,17 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: ['**/llm-*.spec.ts', '**/dashboard.spec.ts'],
+      testIgnore: ['**/llm-*.spec.ts', '**/dashboard.spec.ts', '**/ui-*.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'dashboard',
-      testMatch: '**/dashboard.spec.ts',
+      testMatch: ['**/dashboard.spec.ts', '**/ui-*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: process.env.UI_BASE_URL ?? 'http://localhost:3840',
+        // Свій Chromium (наприклад, уже встановлений у контейнері) замість завантаженого Playwright.
+        ...(process.env.PW_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } } : {}),
       },
     },
     {

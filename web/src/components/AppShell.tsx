@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext';
 import { usePolling } from '../hooks/useAsync';
 import { useKeyMap } from '../hooks/useKeyboard';
 import { S } from '../strings';
+import { S2 } from '../strings-v2';
 import KeyboardHelp from './KeyboardHelp';
 import { Empty, ErrorState, Loading } from './states';
 import Toasts from './Toasts';
@@ -27,8 +28,10 @@ const NAV_GROUPS = [
   {
     label: S.nav.groupCycle,
     items: [
+      { to: '/inputs', label: S2.nav.inputs, glyph: '⇣', end: false, hint: S2.nav.hintInputs },
       { to: '/cases', label: S.nav.cases, glyph: '▤', end: false, hint: S.nav.hintCases },
       { to: '/proposals', label: S.nav.proposals, glyph: '✓', end: false, badge: true, hint: S.nav.hintProposals },
+      { to: '/tasks', label: S2.nav.tasks, glyph: '◎', end: false, taskBadge: true, hint: S2.nav.hintTasks },
       { to: '/runs', label: S.nav.runs, glyph: '▶', end: false, hint: S.nav.hintRuns },
       { to: '/defects', label: S.nav.defects, glyph: '⚠', end: false, hint: S.nav.hintDefects },
     ],
@@ -58,6 +61,7 @@ export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [pending, setPending] = useState(0);
+  const [awaiting, setAwaiting] = useState(0);
   const location = useLocation();
 
   // Шухляда закривається при переході — інакше лишається поверх нового екрана.
@@ -72,6 +76,13 @@ export default function AppShell() {
         setPending(page.total);
       } catch {
         setPending(0);
+      }
+      try {
+        // Задачі, що чекають рішення людини: агент питає або результат на перевірці.
+        const tasks = await api.listTasks({ projectId, state: ['review', 'needs_info'], limit: 1 }, signal);
+        setAwaiting(tasks.total);
+      } catch {
+        setAwaiting(0);
       }
     },
     30_000,
@@ -127,6 +138,11 @@ export default function AppShell() {
                     {item.glyph}
                   </span>
                   {item.label}
+                  {'taskBadge' in item && item.taskBadge && awaiting > 0 && (
+                    <span className="nav-count" aria-label={`${S2.nav.tasks}: ${awaiting}`}>
+                      {awaiting}
+                    </span>
+                  )}
                   {'badge' in item && item.badge && pending > 0 && (
                     <span className="nav-count" aria-label={`${S.dashboard.proposalsPending}: ${pending}`}>
                       {pending}

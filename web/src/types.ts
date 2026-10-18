@@ -75,6 +75,9 @@ export interface Project {
   confluenceSpace?: string;
   testrailProjectId?: number;
   testrailSuiteId?: number;
+  /** Репозиторій продукту на GitHub: `owner/name`. */
+  repo?: string;
+  settings?: import('./types-v2').ProjectSettings;
   createdAt: string;
   updatedAt: string;
 }
@@ -215,6 +218,8 @@ export interface Block {
   text: string;
   hash: string;
   changeState: BlockChangeState;
+  nodeId?: string;
+  route?: string;
 }
 
 export interface Coverage {
@@ -711,3 +716,5 @@ export interface LlmCheck {
   models?: string[];
   error?: string;
 }
+
+export * from './types-v2';

@@ -1,0 +1,166 @@
+/* Огляд: розділ «Цикл із агентами». Кольори — лише через токени. */
+
+.agentic .card-head .health-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  text-decoration: none;
+}
+.agentic .card-head .health-chips:hover .chip {
+  border-color: var(--border-strong);
+}
+
+.agentic-top {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(170px, 1fr));
+  gap: var(--sp-3);
+}
+
+/* Головна плитка: що чекає рішення людини. Найпомітніша на екрані. */
+.agentic-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--sh-1);
+}
+.agentic-hero:hover {
+  text-decoration: none;
+  border-color: var(--accent-border);
+  background: var(--surface-hover);
+}
+.agentic-hero.attention {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+  box-shadow: inset 4px 0 0 var(--warn), var(--sh-1);
+}
+.agentic-hero-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.agentic-hero-value {
+  font-size: calc(var(--fs-2xl) * 1.5);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.agentic-hero-note {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.agentic-hero-cta {
+  margin-top: auto;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--accent-text, var(--accent));
+}
+
+.agentic-oldest {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-xs);
+}
+.agentic-oldest li {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: baseline;
+  min-width: 0;
+}
+.agentic-oldest li a {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agentic-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.agentic-panel h3 {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.agentic-panel p {
+  margin: 0;
+}
+
+/* Рядок воронки: справа «8 з 11 · 73%», тож колонка числа ширша. */
+.funnel-row {
+  grid-template-columns: minmax(110px, 40%) 1fr auto;
+}
+
+.agentic-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.agentic-flag:hover span:last-child {
+  text-decoration: underline;
+}
+
+.agentic-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin: 0;
+}
+.agentic-stats > div {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.agentic-stats dt {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.agentic-stats dd {
+  margin: 0;
+}
+
+.push-list {
+  margin: 0;
+}
+.push-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-1) 0;
+  border-bottom: 1px solid var(--grid-line);
+}
+.push-item:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .agentic-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .agentic-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agentic .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

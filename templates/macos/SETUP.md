@@ -51,19 +51,31 @@ cp .env.example .env && chmod 600 .env
 Заповніть (сервісні облікові записи, не особисті токени):
 
 ```ini
+# Доступ: людей пускає Tailscale, решта — лише з токеном
+JULES_REQUIRE_AUTH=1
+JULES_ADMINS=<логін QA-ліда в Tailscale>
+JULES_QA_USERS=<логіни тестувальників через кому>
+JULES_PUBLIC_URL=https://<mac>.<tailnet>.ts.net
+# Адмін-токен для скриптів (npm run smoke:agentic) і як запасний вхід
+JULES_API_TOKEN=<довгий випадковий рядок>
+
 # Confluence Server/Data Center 8.5 — PAT сервісного облікового запису з правом лише на читання просторів
 CONFLUENCE_BASE_URL=https://confluence.corp.example
-CONFLUENCE_API_TOKEN=<PAT>
+CONFLUENCE_TOKEN=<PAT>
 
-# Jira Server/Data Center 9.12 — PAT з правом створювати задачі в одному проєкті (пізніші фази)
+# Jira Server/Data Center 9.12 — PAT з правом створювати задачі в одному проєкті
 JIRA_BASE_URL=https://jira.corp.example
-JIRA_API_TOKEN=<PAT>
+JIRA_TOKEN=<PAT>
 
 # Figma — токен користувача з Full або Dev seat (інакше ліміти API дуже низькі)
 FIGMA_TOKEN=<token>
+
+# Telegram — остання фаза
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
 ```
 
-Точні назви змінних для Confluence і Jira звірте з `.env.example` поточної версії Jules.
+Повний перелік із поясненнями — у `.env.example`.
 
 **Внутрішній центр сертифікації.** Якщо Confluence чи Jira підписані корпоративним CA,
 покладіть ланцюжок у `certs/corp-ca.pem` — служба запускається з
@@ -173,12 +185,19 @@ curl -s https://<mac>.<tailnet>.ts.net/api/health               # з машин�
 curl -fsS https://<mac>.<tailnet>.ts.net/cli/jules-qa.mjs -o /tmp/jules-qa.mjs && node /tmp/jules-qa.mjs --help
 ```
 
-У Jules відкрийте «Налаштування»: стан Confluence, Jira, Figma і VPN має бути зеленим.
+У Jules відкрийте «Налаштування → Інтеграції»: стан Confluence, Jira і Figma має бути зеленим
+(Confluence червона — найчастіше не піднявся VPN або не резолвиться внутрішнє ім'я, див. крок 4–5).
+
+Наскрізна перевірка циклу на живому Jules (створить окремий проєкт `SMK…`):
+
+```bash
+cd /Users/jules/Jules_QA && JULES_URL=http://127.0.0.1:3840 JULES_API_TOKEN=<адмін-токен з .env> npm run smoke:agentic
+```
 
 ## 10. Токен CI для репо продукту
 
-1. Jules → «Налаштування» → проєкт → «Машинний токен CI» → «Видати». Токен показується один
-   раз і дає право лише на інжест і статус цього проєкту.
+1. Jules → «Новий проєкт» (крок «CI») або «Налаштування → Доступ» → видати токен з роллю CI для
+   проєкту. Токен показується один раз і дає право лише на інжест і статус цього проєкту.
 2. У репо продукту на GitHub: Settings → Secrets and variables → Actions:
    - secret `JULES_TOKEN` — токен;
    - variable `JULES_URL` — `https://<mac>.<tailnet>.ts.net`;

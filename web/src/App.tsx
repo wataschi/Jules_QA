@@ -9,13 +9,22 @@ import ProposalsPage from './pages/ProposalsPage';
 import RunDetailPage from './pages/RunDetailPage';
 import RunsPage from './pages/RunsPage';
 import SettingsPage from './pages/SettingsPage';
+import TasksPage from './pages/TasksPage';
+import TaskDetailPage from './pages/TaskDetailPage';
+import InputsPage from './pages/InputsPage';
+import SetupPage from './pages/SetupPage';
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
+        <Route path="inputs" element={<InputsPage />} />
+        <Route path="inputs/:sourceId" element={<InputsPage />} />
+        <Route path="setup" element={<SetupPage />} />
         <Route path="cases" element={<CasesPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="proposals" element={<ProposalsPage />} />
         <Route path="runs" element={<RunsPage />} />
         <Route path="runs/:id" element={<RunDetailPage />} />

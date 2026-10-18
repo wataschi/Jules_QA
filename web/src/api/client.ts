@@ -63,6 +63,8 @@ import type {
   WriteCasesResult,
 } from '../types';
 
+import { httpApiV2, type V2Api } from './client-v2';
+
 export const REGISTRY_BASE = '/api/registry';
 
 /* ───────────────────────── локальні налаштування ─────────────────────── */
@@ -265,7 +267,7 @@ export interface RunQuery {
 
 /* ───────────────────────────── клієнт API ────────────────────────────── */
 
-export interface JulesApi {
+export interface JulesApi extends V2Api {
   /* проєкти */
   listProjects(signal?: AbortSignal): Promise<Project[]>;
   getProject(id: string, signal?: AbortSignal): Promise<Project>;
@@ -395,6 +397,7 @@ export interface JulesApi {
 const R = REGISTRY_BASE;
 
 export const httpApi: JulesApi = {
+  ...httpApiV2,
   /* ── проєкти ── */
   listProjects: (signal) => request<Project[]>(`${R}/projects`, { signal }),
   getProject: (id, signal) => request<Project>(`${R}/projects/${encodeURIComponent(id)}`, { signal }),

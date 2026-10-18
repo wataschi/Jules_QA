@@ -1,6 +1,8 @@
 /**
- * Дашборд — стартовий екран: черга рішень, KPI, зведення за модулями,
- * нестабільні кейси, останні прогони. Одне джерело — `GET /api/registry/dashboard`.
+ * Дашборд — стартовий екран: цикл із агентами (задачі, трасування, тести в
+ * коді, main, коміти повз PR), черга рішень, KPI, зведення за модулями,
+ * нестабільні кейси, останні прогони. Джерела — `GET /api/registry/dashboard`
+ * і `GET /api/registry/dashboard/agentic` (див. `dashboard/AgenticSection.tsx`).
  */
 
 import { Link } from 'react-router-dom';
@@ -24,6 +26,7 @@ import {
   runKindLabel,
 } from '../strings';
 import type { AutomationStatus, CasePriority, CaseStatus, DashboardData } from '../types';
+import { AgenticSection } from './dashboard/AgenticSection';
 import { flakeTone, formatAgo, formatDateTime, formatNumber, formatPercent, passRateTone } from '../utils/format';
 
 export default function DashboardPage() {
@@ -49,6 +52,7 @@ export default function DashboardPage() {
           </>
         }
       />
+      <AgenticSection />
       <Async state={state} skeletonRows={8}>
         {(data) => <DashboardBody data={data} />}
       </Async>

@@ -11,6 +11,7 @@
  */
 
 import type { JulesApi } from './client';
+import { mockApiV2 } from './mock-v2';
 import { ApiError, qs, withToken } from './client';
 import type {
   AutomationStatus,
@@ -812,6 +813,7 @@ let counter = 100;
 const nextId = (prefix: string) => `${prefix}-${++counter}`;
 
 export const mockApi: JulesApi = {
+  ...mockApiV2,
   listProjects: (signal) => delay([project], 120, signal),
   getProject: (_id, signal) => delay(project, 120, signal),
   patchProject: (_id, patch, signal) => {

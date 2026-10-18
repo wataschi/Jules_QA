@@ -17,7 +17,7 @@
     "test:unit": "vitest run tests/unit",
     "test:api": "vitest run tests/api",
     "test:fast": "vitest run tests/unit tests/api",
-    "test:ui": "playwright test e2e/dashboard.spec.ts --project=dashboard",
+    "test:ui": "playwright test --project=dashboard",
     "test:llm": "playwright test e2e/llm-*.spec.ts --project=llm --grep @llm",
     "test:all": "npm run test:fast && npm run test:llm",
     "test:docker:fast": "docker compose exec qa npm run test:fast",
@@ -49,6 +49,7 @@
     "docker:report": "docker compose run --rm qa npm run report:aggregate -- invalid-password-registration",
     "docker:gpu:up": "docker compose --profile gpu up -d vllm",
     "registry:smoke": "tsx scripts/smoke-registry.ts",
+    "smoke:agentic": "tsx scripts/smoke-agentic.ts",
     "registry:analyze": "tsx scripts/analyze-run.ts"
   },
   "engines": {

@@ -148,3 +148,90 @@
 `/api/llm/check`, `/api/stats`) лишаються без змін — на них спирається рушій і старі скрипти.
 Нові екрани використовують `/api/registry/**`; зв'язок між світами — поле
 `case.automation.scenarioPath` і `runItem.autoRunId`.
+
+---
+
+# Jules 2.0: «QA направляє, агент робить»
+
+План і схема — [`agent-driven-qa-plan.md`](agent-driven-qa-plan.md). Нижче — маршрути, додані до
+`/api/registry`. Типи — у `src/registry/types.ts` (розділ «Jules 2.0»).
+
+## Доступ
+
+Хто є хто визначається в такому порядку:
+
+1. `Tailscale-User-Login` від `tailscale serve`. Довіряємо лише для з'єднань із loopback, тому сервер
+   слухає `127.0.0.1`.
+2. Адмін-токен `JULES_API_TOKEN`.
+3. Токен з `api_tokens`.
+4. Локальний режим: якщо не задано ні `JULES_API_TOKEN`, ні `JULES_REQUIRE_AUTH=1`.
+
+Токен CI має доступ лише до `ingest/*`, `status.md`, `pr-comment.md`, `cases/reserve` і
+`GET /projects/:id` свого проєкту. Чужий `projectId` для нього — 403.
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| GET | `/me` | Хто я: логін, роль (`admin`/`qa`/`dev`/`ci`), спосіб входу |
+| GET · PATCH | `/users`, `/users/:login` | Користувачі; роль змінює адмін. Перші ролі — зі списків `JULES_ADMINS`, `JULES_QA_USERS` |
+| GET · POST · DELETE | `/tokens`, `/tokens/:id` | Токени. Значення віддається один раз при видачі, у базі лише sha256. Токен CI прив'язаний до проєкту |
+
+## Задачі для агентів
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| GET | `/tasks?projectId=&state=&kind=&sectionId=&mine=1&q=&page=` | `Page<TaskListItem>` (з `ageHours`, `sectionName`) |
+| POST | `/tasks` | `{ projectId, kind, title, text?, anchor?, priority? }` → `Task`. Модуль і власники визначаються з якоря |
+| GET | `/inbox?projectId=&paths=` | Задачі, які агент може взяти: власник модуля → модулі змінених файлів → пріоритет → вік |
+| GET | `/tasks/:id` | `{ task, events, jobs, context }` |
+| POST | `/tasks/:id/claim` · `/heartbeat` · `/release` | Оренда (дефолт 30 хв, `thresholds.leaseMinutes`) |
+| POST | `/tasks/:id/ask` · `/answer` · `/comment` | Питання агента (`needs_info`), відповідь QA (знову `queued`), коментар |
+| POST | `/tasks/:id/report` | `{ summary, checks[], tests[], prUrl?, branch? }` → `review`. Для `add_test`/`change_test`/`remove_test`/`stabilize` `prUrl` обов'язковий |
+| POST | `/tasks/:id/fail` · `/confirm` · `/request-changes` · `/reject` | Задача з PR закривається, коли QA підтвердив і PR злито; без PR — одразу після підтвердження |
+
+Види задач: `add_test`, `change_test`, `remove_test`, `plan_module`, `read_asset`, `triage`,
+`stabilize`, `question`. Задачі `question` — питання до людей, агенти їх не беруть.
+
+## Входи
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| GET | `/sources/tree?projectId=` | Дерево джерел (сторінки за батьками, файли Figma) |
+| PATCH | `/sources/:id` | `{ included?, noAgents?, sectionId? }` — галочки «брати» і «не віддавати агентам», модуль |
+| GET | `/sources/:id/view` | Блоки джерела з вкладеннями, кадрами і станом прочитання |
+| GET | `/requirements?blockIds=` · `/blocks/:id` | Той самий вигляд для довільних блоків |
+| POST | `/inputs/confluence/tree` | `{ projectId, ref }` — дерево сторінок без тіл (посилання на простір або сторінку, `/display/`, `/x/`, `pageId`) |
+| POST | `/inputs/confluence/modules` | `{ projectId, rootSourceId }` — модулі з першого рівня дерева + задачі `plan_module` |
+| POST | `/inputs/figma` | `{ projectId, url }` — файл або кадр Figma як джерело; кадр = блок + знімок |
+| POST | `/inputs/sync` · `/sources/:id/sync` | Оновлення вибраних джерел (за версією сторінки чи файлу); зміни в блоках із кейсами дають `case_update` |
+| PATCH | `/blocks/:id` | `{ route }` — кадр ↔ маршрут застосунку |
+| GET | `/assets?projectId=&readingState=` · `/assets/:id/file` | Вкладення; файл віддається з `nosniff` і `CSP: sandbox` |
+| POST | `/assets/:id/reading` · `/assets/:id/decide` | Опис картинки від агента; рішення QA (`approve`, правка тексту). Рішення закриває або повертає задачу `read_asset` |
+
+## Результати CI і статус
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| POST | `/ingest/run` | `{ sha, branch, prNumber?, event: pr\|main\|local, source, runUrl?, manifest?, results[], coverage?, mutation?, assertionChanges?, codeowners? }` → `{ runId, tests, failed, unknownCases, tasks }`. Прогін `kind='ci'`; на main — `triage` на падіння, `stabilize` на флейки, кейс із тестом на main стає `automated` |
+| POST | `/ingest/pr-event` | `{ prNumber, state: opened\|merged\|closed }` — злиття закриває підтверджені задачі, закриття без злиття повертає їх у чергу |
+| POST | `/ingest/push-check` | `{ sha, branch, viaPr, prNumbers }` — коміт у main повз PR позначається і йде в сповіщення |
+| GET | `/status.md?projectId=&branch=main` · `/status` | Вміст `QA_STATUS.md` (детермінований) або ті самі дані JSON |
+| GET | `/pr-comment.md?projectId=&prNumber=&sha=` | Коментар у PR, перший рядок `<!-- jules-qa -->` |
+| POST | `/cases/reserve` | `{ section, title, ... }` → `{ caseId, proposalId }`: кейс-чернетка з ID одразу, затвердження чекає QA |
+| GET · PATCH | `/tests`, `/tests/:id` | Тести в коді з кейсами й останнім результатом; карантин |
+| GET · POST | `/push-checks`, `/push-checks/:id/ack` | Коміти в main повз PR і позначка «бачив» |
+
+## Звіти й стан
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| GET | `/dashboard/agentic?projectId=` | Зведення циклу: задачі, трасування, тести за рівнями, main, прийняття QA за моделями, стан інтеграцій |
+| GET · POST | `/reports/weekly` | Перегляд і публікація тижневої задачі в Jira (одна на тиждень, мітка `jules-weekly-<тиждень>`) |
+| GET · POST | `/health`, `/health/check` | Стан Confluence, Jira, Figma; перехід «працює ↔ лежить» іде в сповіщення |
+| GET · POST | `/notifications`, `/notifications/test` | Журнал сповіщень і перевірка Telegram |
+
+## Поза `/api/registry`
+
+| Метод | Шлях | Опис |
+|---|---|---|
+| POST | `/mcp` | MCP-сервер для агентів розробників (Streamable HTTP, без сесій). Вхід — як для API. Інструменти: `qa_inbox`, `qa_claim`, `qa_heartbeat`, `qa_release`, `qa_get_case`, `qa_get_requirement`, `qa_get_screen`, `qa_get_asset`, `qa_propose_plan`, `qa_post_reading`, `qa_reserve_case`, `qa_ask`, `qa_raise_question`, `qa_report`, `qa_fail`, `qa_weekly_data`, `qa_weekly_publish` |
+| GET | `/cli/jules-qa.mjs` | Зібраний CLI для CI і хуків репо продукту (публічно) |
