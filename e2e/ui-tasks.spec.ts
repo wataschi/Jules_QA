@@ -50,7 +50,7 @@ test.describe('Задачі агентів', () => {
   test('Задача на перевірці: видно «Що перевіряє» і PR, підтвердження наміру змінює стан', async ({ page }) => {
     await gotoMock(page, '/tasks?state=review,needs_info');
     await row(page, 'CYBER-T-3').click();
-    await expect(page).toHaveURL(/\/tasks\/CYBER-T-3$/);
+    await expect(page).toHaveURL(/\/tasks\/CYBER-T-3(\?|$)/);
 
     await expect(page.getByRole('heading', { name: 'Що перевіряє' })).toBeVisible();
     await expect(page.getByTestId('task-checks')).toContainText('Користувач лишається на сторінці входу');
@@ -114,6 +114,6 @@ test.describe('Задачі агентів', () => {
     await page.keyboard.press('j');
     await expect(page.locator('table.tbl-tasks tbody tr.cursor')).toHaveCount(1);
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/\/tasks\/CYBER-T-\d+$/);
+    await expect(page).toHaveURL(/\/tasks\/CYBER-T-\d+(\?|$)/);
   });
 });

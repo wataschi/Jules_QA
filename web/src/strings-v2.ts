@@ -6,6 +6,11 @@
 import type { ReadingState, TaskKind, TaskState } from './types';
 
 export const S2 = {
+  empty: {
+    noProject: 'Ще немає жодного проєкту',
+    noProjectHint: 'Майстер підключить репозиторій, сторінки Confluence і файли Figma та запропонує модулі.',
+    noProjectAction: 'Створити проєкт',
+  },
   nav: {
     inputs: 'Входи',
     hintInputs: 'Confluence і Figma: які сторінки й макети беремо, що на картинках, що змінилось',

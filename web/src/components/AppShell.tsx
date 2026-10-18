@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api, isMock } from '../api';
 import { useApp } from '../context/AppContext';
 import { usePolling } from '../hooks/useAsync';
@@ -230,8 +230,17 @@ export default function AppShell() {
             <Loading rows={6} />
           ) : projectsError && projects.length === 0 ? (
             <ErrorState message={projectsError} onRetry={reloadProjects} />
-          ) : projects.length === 0 ? (
-            <Empty title={S.settings.projectSection} hint={S.empty.treeHint} />
+          ) : projects.length === 0 && location.pathname !== '/setup' ? (
+            // Майстер нового проєкту — єдиний екран, що має сенс без проєкту.
+            <Empty
+              title={S2.empty.noProject}
+              hint={S2.empty.noProjectHint}
+              action={
+                <Link className="btn btn-primary" to="/setup">
+                  {S2.empty.noProjectAction}
+                </Link>
+              }
+            />
           ) : (
             <Outlet />
           )}

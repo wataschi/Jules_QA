@@ -36,10 +36,21 @@ test.describe('Веб-інтерфейс реєстру', () => {
     await page.goto(`${baseURL}/?mock=0`);
     await expect(page.locator('.shell-main')).toBeVisible();
 
-    // Або дані завантажились (бекенд готовий), або видно ErrorState із кнопкою.
+    // Або дані завантажились (бекенд готовий), або видно ErrorState із кнопкою,
+    // або порожній реєстр веде в майстер нового проєкту.
     const errorRetry = page.getByRole('button', { name: 'Спробувати ще' });
     const kpi = page.locator('.kpi').first();
-    await expect(errorRetry.or(kpi).first()).toBeVisible({ timeout: 15_000 });
+    const setup = page.getByRole('link', { name: 'Створити проєкт' });
+    await expect(errorRetry.or(kpi).or(setup).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('Порожній реєстр веде в майстер, і майстер відкривається', async ({ page }) => {
+    const projects = await page.request.get(`${baseURL}/api/registry/projects`);
+    test.skip(!projects.ok() || (await projects.json()).length > 0, 'Потрібен порожній реєстр без авторизації');
+    await page.goto(`${baseURL}/?mock=0`);
+    await page.getByRole('link', { name: 'Створити проєкт' }).click();
+    await expect(page).toHaveURL(/\/setup/);
+    await expect(page.locator('.shell-content')).not.toContainText('Ще немає жодного проєкту');
   });
 
   test('Навігація по шести розділах', async ({ page }) => {
