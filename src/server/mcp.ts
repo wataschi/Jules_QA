@@ -37,7 +37,7 @@ import { createCase } from '../registry/cases-store.js';
 import { casePrioritySchema, caseKindSchema, type Task } from '../registry/types.js';
 import { requestAuthor } from './auth.js';
 import { DATA_NOTICE, requirementViews, taskContext } from './task-context.js';
-import { applyTriage, triageSchemaShape } from './workflow.js';
+import { triageSchemaShape } from './workflow.js';
 import { publishWeekly, weeklyPreview } from './weekly.js';
 
 const MAX_IMAGES = 4;
@@ -140,7 +140,9 @@ export function buildMcpServer(req: Request): McpServer {
         const task = claimTask(taskId, holder, { agent, model });
         const context = taskContext(task, { forAgent: true });
         recordGiven(task.id, holder, context.given);
-        return json({ task: brief(task), context, events: listEvents(task.id) });
+        // Текст і якір — те, що саме просить QA (або що впало); це теж дані, а не інструкції.
+        const detail = { ...brief(task), text: task.text, anchor: task.anchor, priority: task.priority, sectionId: task.sectionId };
+        return json({ task: detail, context, events: listEvents(task.id) });
       })(),
   );
 
@@ -423,9 +425,12 @@ export function buildMcpServer(req: Request): McpServer {
       guard(() => {
         const before = requireTask(taskId);
         if (before.kind === 'triage' && !triage) throw new Error('Для розбору падіння вкажіть triage.classification');
-        const task = reportTask(taskId, holder, { summary, checks, tests, prUrl, branch });
-        const effects = triage && task.kind === 'triage' ? applyTriage(task, { ...triage, note: summary }, holder) : undefined;
-        return json({ task: brief(task), effects, next: 'QA перевірить намір у Jules, розробник — код у PR.' });
+        const task = reportTask(taskId, holder, { summary, checks, tests, prUrl, branch, triage: before.kind === 'triage' ? triage : undefined });
+        const next =
+          task.kind === 'triage'
+            ? 'QA перевірить розбір у Jules; дефект, карантин чи задача на тест з’являться після підтвердження.'
+            : 'QA перевірить намір у Jules, розробник — код у PR.';
+        return json({ task: brief(task), next });
       })(),
   );
 

@@ -11,6 +11,7 @@ import path from 'node:path';
 import { getAssetsDir } from '../server/data-paths.js';
 import { execute, nowIso, placeholders, query, queryOne, tx, type Row } from './db.js';
 import { newId } from './ids.js';
+import { isNoAgents } from './sources-store.js';
 import { assetSchema, type Asset, type AssetKind, type ReadingState } from './types.js';
 
 function rowToAsset(row: Row): Asset {
@@ -81,18 +82,23 @@ export function upsertAsset(input: UpsertAssetInput): { asset: Asset; needsReadi
       [input.projectId, input.blockId ?? null, input.kind, input.name],
     );
     const extracted = (input.extractedText ?? '').trim();
-    const sameFile = existing && existing.sha256 && existing.sha256 === input.sha256;
+    // Файл не завантажився (мережа, таймаут): лишаємо відомий файл і його прочитання,
+    // записуємо лише помилку — інакше погоджене QA прочитання злетить до наступної синхронізації.
+    const keepFile = Boolean(existing && input.error && !input.sha256 && existing.sha256);
+    const sha256 = keepFile ? (existing?.sha256 as string) : (input.sha256 ?? null);
+    const sameFile = Boolean(existing && existing.sha256 && existing.sha256 === sha256);
 
     let reading: string | null = sameFile ? ((existing?.reading as string | null) ?? null) : null;
     let readingBy: string | null = sameFile ? ((existing?.reading_by as string | null) ?? null) : null;
     let readingState: ReadingState = sameFile ? ((existing?.reading_state as ReadingState) ?? 'none') : 'none';
     let decidedBy: string | null = sameFile ? ((existing?.reading_decided_by as string | null) ?? null) : null;
 
-    if (!sameFile && input.sha256) {
+    // Погоджене прочитання того самого файлу (за хешем) — і для нового файлу, і для копії, що досі чекає.
+    if (sha256 && (!sameFile || readingState === 'needed' || readingState === 'none')) {
       const approved = queryOne<Row>(
         `SELECT reading, reading_by, reading_decided_by FROM assets
          WHERE project_id = ? AND sha256 = ? AND reading_state = 'approved' LIMIT 1`,
-        [input.projectId, input.sha256],
+        [input.projectId, sha256],
       );
       if (approved) {
         reading = (approved.reading as string) ?? null;
@@ -104,16 +110,16 @@ export function upsertAsset(input: UpsertAssetInput): { asset: Asset; needsReadi
     // Картинку завжди читають: підпис (alt) — лише підказка, полів і станів він не описує.
     // Схеми, з яких текст уже витягнуто без моделі, прочитання не потребують.
     const contentOnlyInPixels = input.kind === 'image' || (input.kind === 'diagram' && !extracted);
-    if (readingState === 'none' && contentOnlyInPixels && !input.error && input.sha256) {
+    if (readingState === 'none' && contentOnlyInPixels && !input.error && sha256) {
       readingState = 'needed';
     }
 
     const values = [
       input.sourceId ?? null,
       input.diagramType ?? null,
-      input.mediaType ?? null,
-      input.sha256 ?? null,
-      input.size ?? null,
+      keepFile ? ((existing?.media_type as string | null) ?? null) : (input.mediaType ?? null),
+      sha256,
+      keepFile ? ((existing?.size as number | null) ?? null) : (input.size ?? null),
       input.originUrl ?? null,
       extracted,
       reading,
@@ -192,10 +198,24 @@ export function pruneBlockAssets(blockId: string, keep: Array<{ kind: AssetKind;
   return removed;
 }
 
+export interface ProposeReadingOptions {
+  /**
+   * Людина з правами QA може описати й картинку зі сторінки «не віддавати агентам».
+   * Агентам (MCP, токени розробників) це заборонено.
+   */
+  allowNoAgents?: boolean;
+}
+
 /** Агент описав картинку — опис чекає на рішення QA. */
-export function proposeReading(id: string, reading: string, by: string): Asset {
+export function proposeReading(id: string, reading: string, by: string, options: ProposeReadingOptions = {}): Asset {
   const asset = requireAsset(id);
-  if (asset.readingState === 'approved' && asset.reading === reading) return asset;
+  if (!options.allowNoAgents && isNoAgents(asset.sourceId)) {
+    throw new Error('Вкладення зі сторінки «не віддавати агентам» — прочитання від агента не приймається');
+  }
+  if (asset.readingState === 'approved') {
+    if (asset.reading === reading) return asset;
+    throw new Error('Прочитання вже погоджене QA і не перезаписується. Щоб описати знову, QA має спершу його відхилити');
+  }
   execute(
     `UPDATE assets SET reading = ?, reading_by = ?, reading_state = 'proposed', reading_decided_by = NULL, updated_at = ? WHERE id = ?`,
     [reading, by, nowIso(), id],
@@ -203,18 +223,44 @@ export function proposeReading(id: string, reading: string, by: string): Asset {
   return requireAsset(id);
 }
 
-/** Рішення QA щодо прочитання; правку тексту можна внести разом із погодженням. */
+/**
+ * Рішення QA щодо прочитання; правку тексту можна внести разом із погодженням.
+ * Уже погоджене QA може відхилити (скинути) або погодити з правкою.
+ * Погоджене прочитання переноситься на всі копії того самого файлу в проєкті,
+ * що ще чекають прочитання.
+ */
 export function decideReading(id: string, approve: boolean, by: string, editedReading?: string): Asset {
   const asset = requireAsset(id);
-  if (asset.readingState !== 'proposed') throw new Error('Прочитання ще не запропоноване або вже вирішене');
-  execute('UPDATE assets SET reading = ?, reading_state = ?, reading_decided_by = ?, updated_at = ? WHERE id = ?', [
-    editedReading ?? asset.reading ?? null,
-    approve ? 'approved' : 'rejected',
-    by,
-    nowIso(),
-    id,
-  ]);
-  return requireAsset(id);
+  if (asset.readingState !== 'proposed' && asset.readingState !== 'approved') {
+    throw new Error('Прочитання ще не запропоноване або вже вирішене');
+  }
+  return tx(() => {
+    const at = nowIso();
+    const reading = editedReading ?? asset.reading ?? null;
+    execute('UPDATE assets SET reading = ?, reading_state = ?, reading_decided_by = ?, updated_at = ? WHERE id = ?', [
+      reading,
+      approve ? 'approved' : 'rejected',
+      by,
+      at,
+      id,
+    ]);
+    if (approve && asset.sha256) {
+      execute(
+        `UPDATE assets SET reading = ?, reading_by = ?, reading_state = 'approved', reading_decided_by = ?, updated_at = ?
+         WHERE project_id = ? AND sha256 = ? AND id <> ? AND reading_state IN ('needed', 'proposed')`,
+        [reading, asset.readingBy ?? null, by, at, asset.projectId, asset.sha256, id],
+      );
+    }
+    return requireAsset(id);
+  });
+}
+
+/** Інші вкладення проєкту з тим самим файлом — щоб закрити й їхні задачі прочитання. */
+export function sameFileAssetIds(asset: Pick<Asset, 'id' | 'projectId' | 'sha256'>): string[] {
+  if (!asset.sha256) return [];
+  return query<Row>('SELECT id FROM assets WHERE project_id = ? AND sha256 = ? AND id <> ?', [asset.projectId, asset.sha256, asset.id]).map(
+    (row) => String(row.id),
+  );
 }
 
 /** Текст вкладення для агента: витягнуте без моделі або погоджене прочитання. */

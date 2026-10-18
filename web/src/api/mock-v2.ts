@@ -378,6 +378,12 @@ export const mockApiV2: V2Api = {
     addEvent(id, 'comment', text);
     return delay(patchTask(id, { state: 'queued', qaConfirmedAt: undefined, qaConfirmedBy: undefined, queuedAt: new Date().toISOString() }), 160, signal);
   },
+  retryTask: (id, signal) => {
+    const current = requireTask(id);
+    if (current.state !== 'failed') return Promise.reject(new ApiError(`Повторити можна лише невдалу задачу (зараз «${current.state}»)`, 409, `/tasks/${id}/retry`));
+    addEvent(id, 'status', 'Повторити');
+    return delay(patchTask(id, { state: 'queued', queuedAt: new Date().toISOString() }), 140, signal);
+  },
   rejectTask: (id, note, signal) => {
     addEvent(id, 'status', note || 'Відхилено');
     return delay(patchTask(id, { state: 'rejected', doneAt: new Date().toISOString() }), 140, signal);
@@ -455,6 +461,8 @@ export const mockApiV2: V2Api = {
   publishWeekly: (_projectId, input, signal) => delay({ week: input.week ?? '2026-W41', jira: { key: 'CYBER-1234', url: 'https://jira.corp.local/browse/CYBER-1234', created: true } }, 400, signal),
   listNotifications: (signal) => delay({ configured: false, items: notifications }, 120, signal),
   testNotification: (signal) => Promise.reject(new ApiError('Telegram не налаштовано: потрібні TELEGRAM_BOT_TOKEN і TELEGRAM_CHAT_ID', 502, '/notifications/test')).finally(() => signal),
-  patchProjectV2: (_id, patch, signal) => delay({ id: PROJECT, key: 'CYBER', name: 'Кабінет кіберзахисту', description: '', createdAt: iso(1000), updatedAt: new Date().toISOString(), ...patch }, 160, signal),
+  // Справжнє злиття налаштувань — у mock.ts, де живе фікстура проєкту.
+  patchProjectV2: (_id, patch, signal) =>
+    delay({ id: PROJECT, key: 'CYBER', name: 'Кабінет кіберзахисту', description: '', createdAt: iso(1000), updatedAt: new Date().toISOString(), ...patch, settings: undefined }, 160, signal),
   patchSection: (id, patch, signal) => delay({ id, ...patch }, 120, signal),
 };

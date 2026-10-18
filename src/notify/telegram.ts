@@ -33,7 +33,7 @@ export interface TelegramNotifierOptions {
 
 export type NotifyEvent =
   | { kind: 'source_down'; source: string; since: string; error?: string }
-  | { kind: 'source_up'; source: string; downMinutes: number }
+  | { kind: 'source_up'; source: string; downMinutes: number; since?: string }
   | { kind: 'stale_task'; taskId: string; title: string; ageHours: number; url?: string }
   | { kind: 'main_red'; project: string; sha: string; failed: number; url?: string }
   | { kind: 'direct_push'; project: string; sha: string; author?: string }
@@ -204,7 +204,10 @@ export function eventDedupKey(event: NotifyEvent): string {
     case 'source_down':
       return `source_down:${event.source}:${event.since}`;
     case 'source_up':
-      return `source_up:${event.source}:${Math.round(event.downMinutes)}`;
+      // Початок падіння в ключі: друге падіння тієї самої тривалості — інша подія.
+      return event.since
+        ? `source_up:${event.source}:${event.since}`
+        : `source_up:${event.source}:${Math.round(event.downMinutes)}`;
     case 'stale_task':
       return `stale_task:${event.taskId}:d${Math.floor(Math.max(0, event.ageHours) / 24)}`;
     case 'main_red':

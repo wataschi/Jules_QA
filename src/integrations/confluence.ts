@@ -907,14 +907,10 @@ export async function downloadAttachment(
   return readBinary(response, opts?.maxBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES, `«${filename}»`);
 }
 
-/**
- * Завантажує зовнішню картинку за http(s)-адресою. Облікові дані Confluence
- * додаються лише для адрес на тому ж сервері.
- */
-export async function downloadUrl(
-  url: string,
-  opts?: ConfluenceRequestOptions & { maxBytes?: number },
-): Promise<{ data: Buffer; mediaType: string }> {
+/** Скільки перенаправлень `downloadUrl` проходить сам, перевіряючи кожну адресу. */
+const MAX_DOWNLOAD_REDIRECTS = 3;
+
+function parseHttpUrl(url: string): URL {
   let parsed: URL;
   try {
     parsed = new URL(url.trim());
@@ -924,25 +920,61 @@ export async function downloadUrl(
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new ConfluenceError(`Завантажувати можна лише http(s)-адреси, отримано ${parsed.protocol}`, { status: 400 });
   }
+  return parsed;
+}
+
+/**
+ * Завантажує зовнішню картинку за http(s)-адресою. Облікові дані Confluence
+ * додаються лише для адрес на тому ж сервері.
+ *
+ * Перенаправлення не йдуть автоматично: кожну нову адресу (до трьох)
+ * перевіряє `allowHost` (без нього — лише той самий сервер або Confluence),
+ * щоб дозволений хост не міг відправити запит на внутрішню адресу.
+ */
+export async function downloadUrl(
+  url: string,
+  opts?: ConfluenceRequestOptions & { maxBytes?: number; allowHost?: (url: string) => boolean },
+): Promise<{ data: Buffer; mediaType: string }> {
+  let parsed = parseHttpUrl(url);
   const resolved = isConfluenceConfigured() ? resolveConfig() : null;
-  const own = resolved && sameOrigin(parsed.toString(), resolved.config.apiBase);
-  const response = await send(
-    {
-      fetchImpl: opts?.fetch ?? globalThis.fetch,
-      sleep: opts?.sleep ?? sleepImpl,
-      timeoutMs: resolved?.config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-      ...(own ? { authorization: resolved.authorization, flavor: resolved.config.flavor } : {}),
-    },
-    parsed.toString(),
-    { accept: '*/*' },
-  );
-  if (!response.ok) {
-    const body = await response.text().catch(() => response.statusText);
-    throw new ConfluenceError(`Сервер відповів ${response.status} на ${parsed.toString()}. ${shortBody(body, 120)}`.trim(), {
-      status: response.status,
-    });
+  const startOrigin = parsed.origin;
+  const allowed =
+    opts?.allowHost ??
+    ((next: string) => sameOrigin(next, startOrigin) || Boolean(resolved && sameOrigin(next, resolved.config.apiBase)));
+
+  for (let hop = 0; ; hop += 1) {
+    const own = resolved && sameOrigin(parsed.toString(), resolved.config.apiBase);
+    const response = await send(
+      {
+        fetchImpl: opts?.fetch ?? globalThis.fetch,
+        sleep: opts?.sleep ?? sleepImpl,
+        timeoutMs: resolved?.config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        ...(own ? { authorization: resolved.authorization, flavor: resolved.config.flavor } : {}),
+      },
+      parsed.toString(),
+      { accept: '*/*', redirect: 'manual' },
+    );
+    const location = headerOf(response, 'location');
+    if (response.status >= 300 && response.status < 400 && location) {
+      await response.text().catch(() => '');
+      if (hop >= MAX_DOWNLOAD_REDIRECTS) {
+        throw new ConfluenceError(`Файл ${url} не завантажено: забагато перенаправлень (понад ${MAX_DOWNLOAD_REDIRECTS}).`, { status: 502 });
+      }
+      const next = parseHttpUrl(new URL(location, parsed).toString());
+      if (!allowed(next.toString())) {
+        throw new ConfluenceError(`Файл ${url} не завантажено: сервер перенаправив на недозволений хост ${next.host}.`, { status: 403 });
+      }
+      parsed = next;
+      continue;
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => response.statusText);
+      throw new ConfluenceError(`Сервер відповів ${response.status} на ${parsed.toString()}. ${shortBody(body, 120)}`.trim(), {
+        status: response.status,
+      });
+    }
+    return readBinary(response, opts?.maxBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES, parsed.pathname.split('/').pop() || 'за посиланням');
   }
-  return readBinary(response, opts?.maxBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES, parsed.pathname.split('/').pop() || 'за посиланням');
 }
 
 /* ───────────────────────── парсер storage-HTML ───────────────────────── */

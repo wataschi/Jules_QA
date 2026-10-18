@@ -5,7 +5,7 @@ import { caseInputSchema, bulkRequestSchema, automationStatusSchema } from '../.
 import { requireProject } from '../../registry/projects-store.js';
 import { caseHistory, createCase, deleteCase, getCase, getCaseDetail, listCases, setAutomation, updateCase, type CasePatch } from '../../registry/cases-store.js';
 import { runBulk, undoBulk } from '../../registry/bulk.js';
-import { requestAuthor } from '../auth.js';
+import { requestAuthor, requireRole } from '../auth.js';
 import { fail, asBool, asInt, requireProjectId, filterFromQuery } from './common.js';
 
 export function registerCasesRoutes(router: Router): void {
@@ -29,7 +29,8 @@ export function registerCasesRoutes(router: Router): void {
 
   router.post('/cases/bulk', (req, res) => {
     try {
-      const body = bulkRequestSchema.parse({ ...req.body, author: req.body?.author ?? requestAuthor(req) });
+      requireRole(req, 'qa');
+      const body = bulkRequestSchema.parse({ ...req.body, author: requestAuthor(req) });
       res.json(runBulk(body));
     } catch (error) {
       fail(res, error);
@@ -38,6 +39,7 @@ export function registerCasesRoutes(router: Router): void {
 
   router.post('/cases/bulk/undo', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z.object({ batchId: z.string().min(1) }).parse(req.body);
       res.json(undoBulk(body.batchId));
     } catch (error) {
@@ -47,6 +49,7 @@ export function registerCasesRoutes(router: Router): void {
 
   router.post('/cases', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z.object({ projectId: z.string().min(1) }).passthrough().parse(req.body);
       const input = caseInputSchema.parse(body);
       res.status(201).json(
@@ -71,6 +74,7 @@ export function registerCasesRoutes(router: Router): void {
 
   router.patch('/cases/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const patch = caseInputSchema.partial().parse(req.body) as CasePatch;
       const updated = updateCase(req.params.id, patch, {
         author: requestAuthor(req),
@@ -84,6 +88,7 @@ export function registerCasesRoutes(router: Router): void {
 
   router.delete('/cases/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       deleteCase(req.params.id, { hard: asBool(req.query.hard, false) }, { author: requestAuthor(req) });
       res.json({ deleted: true, hard: asBool(req.query.hard, false) });
     } catch (error) {
@@ -101,6 +106,7 @@ export function registerCasesRoutes(router: Router): void {
 
   router.post('/cases/:id/automation', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z
         .object({
           status: automationStatusSchema,

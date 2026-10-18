@@ -15,6 +15,7 @@ import {
   listJobs,
   listTasks,
   rejectTask,
+  retryTask,
   releaseTask,
   reportTask,
   requestChanges,
@@ -24,6 +25,7 @@ import {
 import { taskInputSchema, taskKindSchema, taskReportSchema, taskStateSchema } from '../../registry/types.js';
 import { requestAuthor, requireRole } from '../auth.js';
 import { taskContext } from '../task-context.js';
+import { applyTriage } from '../workflow.js';
 import { asArray, asInt, fail, requireProjectId } from './common.js';
 
 /** Хто діє: QA, розробник чи адмін (адмін у UI — це завжди погодження QA). */
@@ -168,7 +170,11 @@ export function registerTasksRoutes(router: Router): void {
   router.post('/tasks/:id/confirm', (req, res) => {
     try {
       requireRole(req, 'qa');
-      res.json(confirmTask(req.params.id, requestAuthor(req)));
+      const reviewer = requestAuthor(req);
+      const task = confirmTask(req.params.id, reviewer);
+      // Розбір падіння набирає сили лише після підтвердження QA: дефект, карантин, задача на тест.
+      const effects = task.kind === 'triage' && task.report?.triage ? applyTriage(task, { ...task.report.triage, note: task.report.summary }, reviewer) : undefined;
+      res.json(effects ? { ...task, effects } : task);
     } catch (error) {
       fail(res, error);
     }
@@ -178,6 +184,16 @@ export function registerTasksRoutes(router: Router): void {
     try {
       requireRole(req, 'qa');
       res.json(requestChanges(req.params.id, requestAuthor(req), textBody.parse(req.body).text));
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+
+  router.post('/tasks/:id/retry', (req, res) => {
+    try {
+      requireRole(req, 'qa');
+      const body = z.object({ note: z.string().max(5000).optional() }).parse(req.body ?? {});
+      res.json(retryTask(req.params.id, requestAuthor(req), actorKind(req), body.note));
     } catch (error) {
       fail(res, error);
     }

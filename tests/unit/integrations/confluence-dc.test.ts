@@ -606,6 +606,38 @@ describe('вкладення', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('downloadUrl: редирект перевіряється за списком хостів, а не йде куди завгодно', async () => {
+    const allowHost = (url: string) => ['static.example.com', 'cdn.example.com', 'corp.local'].includes(new URL(url).host);
+    fetchMock.mockResolvedValueOnce(redirect('http://169.254.169.254/latest/meta-data/'));
+    await expect(downloadUrl('https://static.example.com/a.png', { allowHost })).rejects.toThrow(/перенаправив на недозволений хост/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(call(0).init.redirect).toBe('manual');
+
+    // Без списку — лише в межах того самого сервера.
+    fetchMock.mockResolvedValueOnce(redirect('https://evil.example.net/x.png'));
+    await expect(downloadUrl('https://static.example.com/b.png')).rejects.toThrow(/недозволений хост/);
+  });
+
+  it('downloadUrl: дозволений редирект — до 3 переходів, PAT лише на свій Confluence', async () => {
+    const allowHost = (url: string) => ['static.example.com', 'cdn.example.com', 'corp.local'].includes(new URL(url).host);
+    fetchMock
+      .mockResolvedValueOnce(redirect(`${BASE}/download/attachments/1/a.png`, 301))
+      .mockResolvedValueOnce(redirect('https://cdn.example.com/a.png'))
+      .mockResolvedValueOnce(new Response(Buffer.from('img'), { status: 200, headers: { 'content-type': 'image/png' } }));
+    const file = await downloadUrl('https://static.example.com/a.png', { allowHost });
+    expect(file.mediaType).toBe('image/png');
+    expect(call(0).headers.Authorization).toBeUndefined();
+    expect(call(1).url).toBe(`${BASE}/download/attachments/1/a.png`);
+    expect(call(1).headers.Authorization).toBe(`Bearer ${PAT}`);
+    expect(call(2).url).toBe('https://cdn.example.com/a.png');
+    expect(call(2).headers.Authorization).toBeUndefined();
+
+    fetchMock.mockReset();
+    for (let i = 0; i < 4; i += 1) fetchMock.mockResolvedValueOnce(redirect(`https://cdn.example.com/${i}.png`));
+    await expect(downloadUrl('https://static.example.com/loop.png', { allowHost })).rejects.toThrow(/забагато перенаправлень/);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it('downloadUrl: файл понад maxBytes відхиляється', async () => {
     fetchMock.mockResolvedValueOnce(new Response(Buffer.alloc(20), { status: 200 }));
     await expect(downloadUrl('https://static.example.com/big.png', { maxBytes: 10 })).rejects.toThrow(/завеликий/);

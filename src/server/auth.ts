@@ -14,7 +14,7 @@
  * Публічні без авторизації: `GET /api/health`, `GET /cli/jules-qa.mjs` і статика UI.
  */
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { findActiveToken, touchUser } from '../registry/access-store.js';
+import { findActiveToken, listUsers, touchUser } from '../registry/access-store.js';
 import type { UserRole } from '../registry/types.js';
 
 const BEARER = /^Bearer\s+(.+)$/i;
@@ -87,7 +87,8 @@ export function requestAuthor(req: Request): string {
 
 /** Кидає 403, якщо роль запиту не з переліку. Адмін і локальний режим проходять завжди. */
 export function requireRole(req: Request, ...roles: PrincipalRole[]): Principal {
-  const principal = req.principal ?? { login: 'local', role: 'admin', kind: 'local' };
+  const principal = req.principal;
+  if (!principal) throw new HttpError(401, 'Потрібна авторизація');
   if (principal.role === 'admin' || roles.includes(principal.role)) return principal;
   throw new HttpError(403, `Недостатньо прав: потрібна роль ${roles.join(' або ')}`);
 }
@@ -102,24 +103,57 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Шлях у тому вигляді, в якому його зіставляє Express: без урахування регістру,
+ * з декодованими символами й без зайвих скісних рисок. Інакше `/API/...`
+ * пройшов би повз перевірку, а маршрут однаково спрацював би.
+ */
+export function normalizedPath(req: Request): string {
+  let path = req.path;
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // Некоректне кодування лишаємо як є: такий шлях однаково не знайде маршруту.
+  }
+  return path.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
+}
+
 function isProtectedPath(path: string): boolean {
-  return path === '/mcp' || path.startsWith('/mcp/') || path.startsWith('/api');
+  return path === '/mcp' || path.startsWith('/mcp/') || path === '/api' || path.startsWith('/api/');
 }
 
 export function isPublicPath(req: Request): boolean {
-  const path = req.path.replace(/\/+$/, '') || '/';
+  const path = normalizedPath(req);
   if (!isProtectedPath(path)) return true;
   return req.method === 'GET' && path === '/api/health';
 }
 
-/** Маршрути, доступні токену CI: інжест, статус і резервування ID свого проєкту. */
-const CI_ALLOWED: RegExp[] = [
-  /^\/api\/registry\/ingest\//,
-  /^\/api\/registry\/status\.md$/,
-  /^\/api\/registry\/pr-comment\.md$/,
-  /^\/api\/registry\/cases\/reserve$/,
-  /^\/api\/registry\/projects\/[^/]+$/,
+/** Маршрути, доступні токену CI: інжест, статус, резервування ID і читання свого проєкту. */
+const CI_ALLOWED: Array<{ method?: string; pattern: RegExp }> = [
+  { method: 'POST', pattern: /^\/api\/registry\/ingest\// },
+  { method: 'GET', pattern: /^\/api\/registry\/status(\.md)?$/ },
+  { method: 'GET', pattern: /^\/api\/registry\/pr-comment\.md$/ },
+  { method: 'POST', pattern: /^\/api\/registry\/cases\/reserve$/ },
+  { method: 'GET', pattern: /^\/api\/registry\/projects\/[^/]+$/ },
 ];
+
+function ciAllowed(req: Request, principal: Principal): boolean {
+  const path = normalizedPath(req);
+  const allowed = CI_ALLOWED.some((rule) => (!rule.method || rule.method === req.method) && rule.pattern.test(path));
+  if (!allowed) return false;
+  const ownProject = /^\/api\/registry\/projects\/([^/]+)$/.exec(path);
+  return !ownProject || ownProject[1] === principal.projectId?.toLowerCase();
+}
+
+const ROLE_RANK: Record<UserRole, number> = { dev: 0, qa: 1, admin: 2 };
+
+/** Персональний токен не дає більше, ніж власник має зараз: зниження ролі діє одразу. */
+function personalTokenRole(role: PrincipalRole, owner?: string): PrincipalRole {
+  if (role === 'ci' || !owner) return role;
+  const current = listUsers().find((user) => user.login === owner)?.role;
+  if (!current) return role;
+  return ROLE_RANK[current] < ROLE_RANK[role] ? current : role;
+}
 
 function resolvePrincipal(req: Request): Principal | 'invalid' | null {
   const login = req.get('tailscale-user-login')?.trim();
@@ -138,7 +172,7 @@ function resolvePrincipal(req: Request): Principal | 'invalid' | null {
     if (!token) return 'invalid';
     return {
       login: token.owner ?? token.name,
-      role: token.role,
+      role: personalTokenRole(token.role, token.owner),
       kind: 'token',
       projectId: token.projectId,
       tokenId: token.id,
@@ -178,8 +212,7 @@ export function createAuthMiddleware(): RequestHandler {
     }
 
     if (principal.role === 'ci') {
-      const path = req.path.replace(/\/+$/, '');
-      if (!CI_ALLOWED.some((pattern) => pattern.test(path))) {
+      if (!ciAllowed(req, principal)) {
         res.status(403).json({ error: 'Токен CI має доступ лише до інжесту й статусу свого проєкту' });
         return;
       }

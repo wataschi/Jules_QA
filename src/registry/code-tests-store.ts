@@ -195,9 +195,15 @@ export function ingestRun(input: IngestRunInput): IngestRunOutcome {
       seen.add(result.key);
       const testId = upsertTest(project.id, result, input.sha, at);
       const caseIds = result.caseIds.filter((id) => known.has(id));
-      setLinks(testId, caseIds);
-      if (result.status === 'skipped') execute(`UPDATE tests SET state = 'skipped' WHERE id = ? AND state = 'active'`, [testId]);
-      if (input.event === 'main') execute('UPDATE tests SET on_main = 1 WHERE id = ?', [testId]);
+      // Стан тесту, його зв'язки й статус кейса задає main. Прогони PR і локальні
+      // лише додають результати; зв'язки ставлять тільки новим тестам, яких на main ще немає.
+      const onMain = Number(queryOne<Row>('SELECT on_main FROM tests WHERE id = ?', [testId])?.on_main ?? 0) === 1;
+      if (input.event === 'main' || !onMain) setLinks(testId, caseIds);
+      if (input.event === 'main') {
+        if (result.status === 'skipped') execute(`UPDATE tests SET state = 'skipped' WHERE id = ? AND state = 'active'`, [testId]);
+        else execute(`UPDATE tests SET state = 'active' WHERE id = ? AND state = 'skipped'`, [testId]);
+        execute('UPDATE tests SET on_main = 1 WHERE id = ?', [testId]);
+      }
       execute(
         `INSERT INTO test_results (id, run_id, test_id, status, duration_ms, error, retries, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -216,11 +222,12 @@ export function ingestRun(input: IngestRunInput): IngestRunOutcome {
     }
 
     // Повний маніфест на main: тести, яких у ньому вже немає, прибрані з коду.
-    if (input.event === 'main' && input.manifest) {
+    // Порожній маніфест — це радше збій збирання, ніж видалення всіх тестів, тож його пропускаємо.
+    if (input.event === 'main' && input.manifest && input.manifest.tests.length > 0) {
       const keys = input.manifest.tests.map((test) => test.key);
       execute(
         `UPDATE tests SET state = 'removed', on_main = 0
-         WHERE project_id = ? AND on_main = 1 ${keys.length ? `AND test_key NOT IN (${placeholders(keys.length)})` : ''}`,
+         WHERE project_id = ? AND on_main = 1 AND test_key NOT IN (${placeholders(keys.length)})`,
         [project.id, ...keys],
       );
     }
@@ -247,6 +254,7 @@ export function ingestRun(input: IngestRunInput): IngestRunOutcome {
         ],
       );
       position += 1;
+      if (input.event !== 'main' || status === 'skipped') continue;
       touchAutomationResult(caseId, {
         lastAutoRunId: runId,
         lastAutoStatus: status === 'failed' ? 'failed' : 'passed',
@@ -285,6 +293,7 @@ export function ingestRun(input: IngestRunInput): IngestRunOutcome {
 
     if (input.event === 'main') {
       markAutomatedFromMain(project.id);
+      unmarkRemovedFromMain(project.id);
     }
     persistFlakeScores(project.id);
 
@@ -318,6 +327,26 @@ function markAutomatedFromMain(projectId: string): void {
       current.id,
       { automation: { ...current.automation, status: 'automated' } },
       { author: 'ci', reason: 'з’явився тест у коді на main' },
+    );
+  }
+}
+
+/** Кейс, усі тести якого прибрано з коду, знову чекає на автоматизацію. */
+function unmarkRemovedFromMain(projectId: string): void {
+  const rows = query<Row>(
+    `SELECT c.id FROM cases c
+     WHERE c.project_id = ? AND json_extract(c.automation, '$.status') = 'automated'
+       AND EXISTS (SELECT 1 FROM test_links tl WHERE tl.case_id = c.id)
+       AND NOT EXISTS (SELECT 1 FROM test_links tl JOIN tests t ON t.id = tl.test_id WHERE tl.case_id = c.id AND t.state <> 'removed')`,
+    [projectId],
+  );
+  for (const row of rows) {
+    const current = getCase(String(row.id));
+    if (!current) continue;
+    updateCase(
+      current.id,
+      { automation: { ...current.automation, status: 'candidate' } },
+      { author: 'ci', reason: 'тести кейса прибрано з коду на main' },
     );
   }
 }
@@ -616,9 +645,12 @@ export function setTestState(id: string, state: 'active' | 'quarantined'): CodeT
 export function markAgentTests(projectId: string, tests: Array<{ file: string; name: string }>): number {
   let marked = 0;
   for (const test of tests) {
+    const name = test.name.trim();
+    if (!name) continue;
+    const pattern = `%${name.replace(/[\\%_]/g, (char) => `\\${char}`)}`;
     const result = execute(
-      `UPDATE tests SET author = 'agent' WHERE project_id = ? AND file = ? AND (full_name = ? OR name = ? OR full_name LIKE ?)`,
-      [projectId, test.file, test.name, test.name, `%${test.name}`],
+      `UPDATE tests SET author = 'agent' WHERE project_id = ? AND file = ? AND (full_name = ? OR name = ? OR full_name LIKE ? ESCAPE '\\')`,
+      [projectId, test.file, name, name, pattern],
     );
     marked += Number(result.changes);
   }

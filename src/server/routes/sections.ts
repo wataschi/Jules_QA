@@ -3,6 +3,7 @@ import type { Router } from 'express';
 import { z } from 'zod';
 import { requireProject } from '../../registry/projects-store.js';
 import { createSection, deleteSection, sectionTree, updateSection } from '../../registry/sections-store.js';
+import { requireRole } from '../auth.js';
 import { fail, requireProjectId } from './common.js';
 
 export function registerSectionsRoutes(router: Router): void {
@@ -18,6 +19,7 @@ export function registerSectionsRoutes(router: Router): void {
 
   router.post('/sections', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z
         .object({
           projectId: z.string().min(1),
@@ -36,6 +38,7 @@ export function registerSectionsRoutes(router: Router): void {
 
   router.patch('/sections/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z
         .object({
           name: z.string().min(1).optional(),
@@ -54,6 +57,7 @@ export function registerSectionsRoutes(router: Router): void {
 
   router.delete('/sections/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const moveCasesTo = typeof req.query.moveCasesTo === 'string' ? req.query.moveCasesTo : undefined;
       deleteSection(req.params.id, { moveCasesTo });
       res.json({ deleted: true });

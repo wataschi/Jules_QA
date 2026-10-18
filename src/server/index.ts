@@ -33,11 +33,15 @@ dotenv.config();
 
 export function createApp(): express.Application {
   const app = express();
-  app.use(express.json({ limit: '1mb' }));
 
-  // Авторизація для всього /api/**, крім GET /api/health.
+  // Авторизація для всього /api/**, крім GET /api/health. Тіло їй не потрібне,
+  // тож вона стоїть до розбору: великий запит без облікових даних не читається.
   warnIfApiUnprotected();
   app.use(createAuthMiddleware());
+
+  // Прогін CI з маніфестом великого репо важить мегабайти, решті API вистачає 1 МБ.
+  app.use('/api/registry/ingest/run', express.json({ limit: '50mb' }));
+  app.use(express.json({ limit: '1mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
@@ -396,6 +400,21 @@ export function createApp(): express.Application {
     res.sendFile(path.join(webDist, 'index.html'), (err) => {
       if (err) res.status(404).send('UI not built. Run: npm run ui:build');
     });
+  });
+
+  // Помилки розбору тіла — JSON, як і решта API, а не HTML-сторінка Express.
+  app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const type = (err as { type?: string } | null)?.type;
+    if (res.headersSent) return next(err);
+    if (type === 'entity.too.large') {
+      res.status(413).json({ error: 'Запит завеликий' });
+      return;
+    }
+    if (type === 'entity.parse.failed') {
+      res.status(400).json({ error: 'Тіло запиту — не коректний JSON' });
+      return;
+    }
+    next(err);
   });
 
   return app;

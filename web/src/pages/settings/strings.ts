@@ -168,6 +168,8 @@ export const SS = {
   sent: 'надіслано',
   queued: 'у черзі',
   failed: 'помилка',
+  skippedDisabled: 'пропущено: сповіщення проєкту вимкнено',
+  retryAt: 'наступна спроба',
   notifyKinds: {
     source_down: 'Система недоступна',
     source_up: 'Система знову працює',

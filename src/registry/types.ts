@@ -776,6 +776,14 @@ export const taskReportSchema = z.object({
   tests: z.array(z.object({ file: z.string(), name: z.string(), caseIds: z.array(z.string()).default([]) })).default([]),
   prUrl: z.string().optional(),
   branch: z.string().optional(),
+  /** Розбір падіння: класифікація агента. Наслідки (дефект, карантин) — лише після підтвердження QA. */
+  triage: z
+    .object({
+      classification: z.enum(['product_bug', 'test_bug', 'flaky', 'environment']),
+      defectTitle: z.string().max(300).optional(),
+      severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+    })
+    .optional(),
 });
 export type TaskReport = z.infer<typeof taskReportSchema>;
 
@@ -856,11 +864,13 @@ export interface HealthCheck {
 export const projectSettingsPatchSchema = z.object({
   confluenceRoots: z.array(z.string()).optional(),
   figmaFiles: z.array(z.string()).optional(),
+  // null прибирає інтеграцію з проєкту.
   jira: z
     .object({ projectKey: z.string().min(1), issueType: z.string(), assignee: z.string(), createBugs: z.boolean() })
     .partial()
+    .nullable()
     .optional(),
-  telegram: z.object({ chatId: z.string(), enabled: z.boolean() }).partial().optional(),
+  telegram: z.object({ chatId: z.string(), enabled: z.boolean() }).partial().nullable().optional(),
   thresholds: z
     .object({
       staleTaskHours: z.number().positive(),
@@ -872,5 +882,5 @@ export const projectSettingsPatchSchema = z.object({
     .optional(),
   codeowners: z.string().optional(),
   levels: z.record(z.string(), z.array(z.string())).optional(),
-  dashboardUrl: z.string().optional(),
+  dashboardUrl: z.string().nullable().optional(),
 });

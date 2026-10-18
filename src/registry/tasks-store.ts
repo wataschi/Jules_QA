@@ -222,7 +222,16 @@ export function createTask(input: CreateTaskInput): { task: Task; created: boole
         `SELECT * FROM tasks WHERE project_id = ? AND dedup_key = ? AND state IN (${placeholders(ACTIVE_STATES.length)})`,
         [input.projectId, input.dedupKey, ...ACTIVE_STATES],
       );
-      if (existing) return { task: rowToTask(existing), created: false };
+      if (existing) {
+        const task = rowToTask(existing);
+        // Та сама причина виникла знову, а попередня спроба не вдалась — пробуємо ще раз.
+        if (task.state === 'failed') {
+          setState(task.id, 'queued', { queued_at: nowIso() });
+          addEvent(task.id, { author: input.author, authorKind: input.authorKind, type: 'status', text: 'Причина повторилась — задача знову в черзі', data: { state: 'queued' } });
+          return { task: requireTask(task.id), created: false };
+        }
+        return { task, created: false };
+      }
     }
 
     const anchor = input.anchor ?? {};
@@ -299,8 +308,11 @@ export function listTasks(options: ListTasksOptions): Page<TaskListItem> {
     params.push(options.sectionId);
   }
   if (options.owner) {
-    where.push('EXISTS (SELECT 1 FROM json_each(t.owners) o WHERE lower(o.value) = lower(?))');
-    params.push(options.owner);
+    const aliases = loginAliases(options.owner);
+    where.push(
+      `EXISTS (SELECT 1 FROM json_each(t.owners) o WHERE ltrim(lower(o.value), '@') IN (${placeholders(aliases.length)}))`,
+    );
+    params.push(...aliases);
   }
   if (options.q) {
     where.push('(lower(t.title) LIKE ? OR lower(t.text) LIKE ? OR lower(t.id) LIKE ?)');
@@ -330,6 +342,22 @@ export function listTasks(options: ListTasksOptions): Page<TaskListItem> {
 }
 
 /**
+ * Як людина може значитись у власниках: повний логін (`alice@corp`) або
+ * хендл із CODEOWNERS (`@alice`) — частина логіна до `@`. Команди CODEOWNERS
+ * (`@org/team`) з логіном не зіставляються: їх задають власниками секції.
+ */
+export function loginAliases(login: string): string[] {
+  const full = login.trim().toLowerCase().replace(/^@/, '');
+  const local = full.split('@')[0];
+  return [...new Set([full, local].filter(Boolean))];
+}
+
+export function isOwner(owners: string[], login: string): boolean {
+  const aliases = new Set(loginAliases(login));
+  return owners.some((owner) => aliases.has(owner.trim().toLowerCase().replace(/^@/, '')));
+}
+
+/**
  * Вхідні задачі для агента: лише ті, що агент може взяти. Спершу задачі,
  * де людина — власник модуля, потім модулі змінених файлів, далі за пріоритетом і віком.
  */
@@ -352,7 +380,7 @@ export function inbox(
   const now = Date.now();
   const items = rows.map((row) => {
     const task = rowToTask(row);
-    const mine = Boolean(login && task.owners.some((owner) => owner.toLowerCase().replace(/^@/, '') === login.replace(/^@/, '')));
+    const mine = Boolean(login && isOwner(task.owners, login));
     const touched = Boolean(task.sectionId && touchedSections.has(task.sectionId));
     return { ...task, ageHours: ageHours(task, now), sectionName: (row.section_name as string | null) ?? undefined, mine, touched };
   });
@@ -497,7 +525,12 @@ export function reportTask(id: string, holder: string, report: Partial<TaskRepor
       throw new Error('Для цієї задачі потрібне посилання на PR: агент віддає результат лише через PR');
     }
     const prNumber = prNumberFromUrl(parsed.prUrl);
+    // Злиття рахується лише для PR цього звіту: після «інакше» старий PR уже не закриває задачу.
+    const merged = prNumber
+      ? queryOne<Row>(`SELECT merged_at FROM pull_requests WHERE project_id = ? AND number = ? AND state = 'merged'`, [task.projectId, prNumber])
+      : undefined;
     setState(id, 'review', {
+      merged_at: (merged?.merged_at as string | undefined) ?? null,
       lease_holder: null,
       lease_until: null,
       report: toJson(parsed),
@@ -526,6 +559,17 @@ export function failTask(id: string, holder: string, reason: string): Task {
     setState(id, 'failed', { lease_holder: null, lease_until: null });
     finishJob(id, holder, 'failed');
     addEvent(id, { author: holder, authorKind: 'agent', type: 'status', text: reason || 'Не вдалося', data: { state: 'failed' } });
+    return requireTask(id);
+  });
+}
+
+/** QA повертає невдалу задачу в чергу: агент візьме її знову. */
+export function retryTask(id: string, author: string, authorKind: ActorKind, note = ''): Task {
+  return tx(() => {
+    const task = requireTask(id);
+    if (task.state !== 'failed') throw new Error(`Повторити можна лише невдалу задачу (зараз «${task.state}»)`);
+    setState(id, 'queued', { queued_at: nowIso() });
+    addEvent(id, { author, authorKind, type: 'status', text: note || 'Повторити', data: { state: 'queued' } });
     return requireTask(id);
   });
 }

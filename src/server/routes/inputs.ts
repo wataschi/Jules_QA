@@ -4,7 +4,7 @@ import type { Router } from 'express';
 import { z } from 'zod';
 import { requireProject } from '../../registry/projects-store.js';
 import { getBlock, listBlocks, requireSource, setBlockRoute, setSourceFlags, sourceTree } from '../../registry/sources-store.js';
-import { assetFilePath, decideReading, listAssets, proposeReading, requireAsset } from '../../registry/assets-store.js';
+import { assetFilePath, decideReading, listAssets, proposeReading, requireAsset, sameFileAssetIds } from '../../registry/assets-store.js';
 import { completeTask, listTasks, requestChanges } from '../../registry/tasks-store.js';
 import { readingStateSchema } from '../../registry/types.js';
 import { requestAuthor, requireRole } from '../auth.js';
@@ -167,8 +167,11 @@ export function registerInputsRoutes(router: Router): void {
 
   router.post('/assets/:id/reading', (req, res) => {
     try {
+      // Описати картинку можуть агенти й розробники; погоджує лише QA (маршрут /decide).
+      const principal = requireRole(req, 'qa', 'dev');
       const body = z.object({ reading: z.string().min(1).max(20_000) }).parse(req.body);
-      res.json(proposeReading(req.params.id, body.reading, requestAuthor(req)));
+      const byQa = principal.role === 'qa' || principal.role === 'admin';
+      res.json(proposeReading(req.params.id, body.reading, requestAuthor(req), { allowNoAgents: byQa }));
     } catch (error) {
       fail(res, error);
     }
@@ -183,7 +186,9 @@ export function registerInputsRoutes(router: Router): void {
         .parse(req.body);
       const reviewer = requestAuthor(req);
       const asset = decideReading(req.params.id, body.approve, reviewer, body.reading);
-      for (const task of readTasksFor(asset.projectId, asset.id)) {
+      // Погоджене прочитання перенесено на копії того самого файлу — їхні задачі теж закриваються.
+      const ids = body.approve ? [asset.id, ...sameFileAssetIds(asset)] : [asset.id];
+      for (const task of ids.flatMap((id) => readTasksFor(asset.projectId, id))) {
         if (body.approve) completeTask(task.id, reviewer, 'qa', 'Прочитання погоджено');
         else if (task.state === 'review') requestChanges(task.id, reviewer, body.note ?? 'Прочитання неточне — опишіть ще раз');
       }

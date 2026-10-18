@@ -27,7 +27,8 @@ const LEVELS = ['unit', 'integration', 'e2e', 'visual'];
 /** Адреса екрана задач із фільтром за станами (повторюваний параметр `state`). */
 export function tasksLink(states: TaskState[], extra: Record<string, string> = {}): string {
   const params = new URLSearchParams();
-  for (const state of states) params.append('state', state);
+  // Екран задач читає стани одним параметром через кому.
+  if (states.length) params.set('state', states.join(','));
   for (const [key, value] of Object.entries(extra)) params.set(key, value);
   return `/tasks?${params.toString()}`;
 }
@@ -134,7 +135,7 @@ function AgenticBody({
             <span className="kpi-note">{SD.staleNone}</span>
           )}
           {tasks.stale > 0 && (
-            <Link className="kpi-note" to={tasksLink(['queued'], { sort: 'age' })}>
+            <Link className="kpi-note" to={tasksLink(['queued'])}>
               {SD.staleGo} →
             </Link>
           )}
@@ -222,7 +223,7 @@ function AgenticBody({
               </Chip>
               <span>{SD.p1NoTests}</span>
             </Link>
-            <Link to="/inputs?reading=pending" className="agentic-flag">
+            <Link to="/inputs?tab=readings" className="agentic-flag">
               <Chip tone={traceability.readingsPending > 0 ? 'warn' : 'good'} mono>
                 {traceability.readingsPending}
               </Chip>

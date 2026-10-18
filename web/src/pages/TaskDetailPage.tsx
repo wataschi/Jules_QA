@@ -54,6 +54,10 @@ export default function TaskDetailPage() {
             await api.requestTaskChanges(id, text ?? '');
             message = T.actions.changesSent;
             break;
+          case 'retry':
+            await api.retryTask(id);
+            message = T.actions.retried;
+            break;
           case 'reject':
             await api.rejectTask(id, text);
             message = T.actions.rejected;

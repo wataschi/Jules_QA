@@ -92,7 +92,12 @@ const PATCHABLE: Record<string, string> = {
 };
 
 /** Часткові налаштування з PATCH: вкладені об'єкти теж часткові. */
-export type ProjectSettingsPatch = { [K in keyof ProjectSettings]?: ProjectSettings[K] extends Record<string, unknown> | undefined ? Partial<NonNullable<ProjectSettings[K]>> : ProjectSettings[K] };
+/** Часткові налаштування: вкладені об'єкти — частково, `null` прибирає ключ. */
+export type ProjectSettingsPatch = {
+  [K in keyof ProjectSettings]?: ProjectSettings[K] extends Record<string, unknown> | undefined
+    ? Partial<NonNullable<ProjectSettings[K]>> | null
+    : ProjectSettings[K];
+};
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -106,6 +111,10 @@ export function mergeSettings(current: ProjectSettings, patch: ProjectSettingsPa
   const merged: Record<string, unknown> = { ...current };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
+    if (value === null) {
+      delete merged[key];
+      continue;
+    }
     const before = merged[key];
     merged[key] = isPlainObject(value) && isPlainObject(before) && key !== 'levels' ? { ...before, ...value } : value;
   }

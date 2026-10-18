@@ -232,8 +232,10 @@ function NotificationsCard() {
                     {formatAgo(item.createdAt)}
                   </td>
                   <td>
-                    {item.error ? (
-                      <Chip tone="bad" title={item.error}>
+                    {item.skippedReason === 'disabled' ? (
+                      <Chip tone="neutral">{SS.skippedDisabled}</Chip>
+                    ) : item.error ? (
+                      <Chip tone="bad" title={item.nextTryAt ? `${SS.retryAt}: ${formatDateTime(item.nextTryAt)}` : item.error}>
                         {SS.failed}
                       </Chip>
                     ) : item.sentAt ? (

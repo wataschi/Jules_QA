@@ -89,10 +89,11 @@ export function ProcessCard() {
     setBusy(true);
     setError(null);
     const base = saved?.settings ?? project.settings;
-    const settings: ProjectSettings = {
+    const settings = {
       confluenceRoots: base?.confluenceRoots ?? [],
       figmaFiles: base?.figmaFiles ?? [],
       ...base,
+      // Порожній ключ — прибрати Jira з проєкту.
       jira: draft.jiraKey.trim()
         ? {
             projectKey: draft.jiraKey.trim(),
@@ -100,14 +101,14 @@ export function ProcessCard() {
             assignee: draft.jiraAssignee.trim() || undefined,
             createBugs: draft.jiraBugs,
           }
-        : undefined,
+        : null,
       telegram: { enabled: draft.telegramOn, chatId: draft.telegramChat.trim() || undefined },
       thresholds: numbers,
-      dashboardUrl: draft.dashboardUrl.trim() || undefined,
+      dashboardUrl: draft.dashboardUrl.trim() || null,
     };
     try {
       const next = await api.patchProjectV2(project.id, { repo: draft.repo.trim() || undefined, settings });
-      setSaved({ ...project, ...next, settings: next.settings ?? settings, repo: next.repo ?? (draft.repo.trim() || undefined) });
+      setSaved({ ...project, ...next, settings: next.settings ?? (settings as ProjectSettings), repo: next.repo ?? (draft.repo.trim() || undefined) });
       toast({ text: SS.saved, tone: 'good' });
       reloadProjects();
     } catch (cause) {

@@ -2,6 +2,7 @@
 import type { Router } from 'express';
 import { projectInputSchema, projectSettingsPatchSchema } from '../../registry/types.js';
 import { createProject, getProject, listProjects, updateProject } from '../../registry/projects-store.js';
+import { requireRole } from '../auth.js';
 import { fail } from './common.js';
 
 export function registerProjectsRoutes(router: Router): void {
@@ -15,6 +16,7 @@ export function registerProjectsRoutes(router: Router): void {
 
   router.post('/projects', (req, res) => {
     try {
+      requireRole(req, 'qa');
       res.status(201).json(createProject(projectInputSchema.parse(req.body)));
     } catch (error) {
       fail(res, error);
@@ -32,6 +34,7 @@ export function registerProjectsRoutes(router: Router): void {
 
   router.patch('/projects/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       // Налаштування — без значень за замовчуванням: їх злиття з наявними робить сховище.
       const patch = projectInputSchema
         .omit({ settings: true })

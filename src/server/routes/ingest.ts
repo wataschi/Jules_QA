@@ -98,6 +98,8 @@ export function registerIngestRoutes(router: Router): void {
   router.post('/ingest/run', (req, res) => {
     try {
       const body = ingestRunSchema.parse(req.body);
+      // Прогони PR і main міняють стан кейсів і задач — їх шле лише CI. Розробнику лишається local.
+      if (body.event !== 'local') requireRole(req, 'ci');
       const projectId = projectFor(req, body.projectId);
       const project = requireProject(projectId);
       if (body.repo && !project.repo) updateProject(projectId, { repo: body.repo });
@@ -120,6 +122,7 @@ export function registerIngestRoutes(router: Router): void {
 
   router.post('/ingest/pr-event', (req, res) => {
     try {
+      requireRole(req, 'ci');
       const body = z
         .object({
           projectId: z.string().optional(),
@@ -142,6 +145,7 @@ export function registerIngestRoutes(router: Router): void {
 
   router.post('/ingest/push-check', (req, res) => {
     try {
+      requireRole(req, 'ci');
       const body = z
         .object({
           projectId: z.string().optional(),

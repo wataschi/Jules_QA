@@ -6,10 +6,13 @@ import request from 'supertest';
 import type { Application } from 'express';
 import { createApp } from '../../src/server/index.js';
 import { createTempRegistry, type TempRegistry } from '../unit/registry/temp-db.js';
+import { completeTask } from '../../src/registry/tasks-store.js';
 import { assignModulesFromTree, importFigma, loadConfluenceTree, syncConfluenceSource } from '../../src/server/inputs.js';
 import { listAssets } from '../../src/registry/assets-store.js';
 import { listBlockLinks, liveBlocks } from '../../src/registry/sources-store.js';
-import { listTasks } from '../../src/registry/tasks-store.js';
+import { createTask, listTasks } from '../../src/registry/tasks-store.js';
+import { requestReading } from '../../src/server/workflow.js';
+import { requirementViews, taskContext } from '../../src/server/task-context.js';
 
 const BASE = '/api/registry';
 const WIKI = 'https://wiki.corp.local';
@@ -211,6 +214,16 @@ describe('входи: дерево Confluence 8.5, вкладення, схем�
     expect(repeat.sections.every((section) => !section.created && section.planTask === null)).toBe(true);
   });
 
+  it('закритий план модуля не перезапускається повторним призначенням модулів', async () => {
+    const { fetchImpl } = fakeNetwork(pages);
+    const tree = await loadConfluenceTree(projectId, '100', { fetch: fetchImpl });
+    const root = tree.sources.find((source) => source.title === 'Проєкт Кібер')!;
+    const { sections } = assignModulesFromTree(projectId, root.id, 'qa@corp');
+    for (const section of sections) completeTask(section.planTask!, 'qa@corp', 'qa', 'план погоджено');
+    const repeat = assignModulesFromTree(projectId, root.id, 'qa@corp');
+    expect(repeat.sections.map((section) => section.planTask)).toEqual([null, null]);
+  });
+
   it('сторінка «не віддавати агентам» приходить в агента без вмісту', async () => {
     const { fetchImpl } = fakeNetwork(pages);
     const tree = await loadConfluenceTree(projectId, '100', { fetch: fetchImpl });
@@ -251,6 +264,105 @@ describe('входи: дерево Confluence 8.5, вкладення, схем�
 
     const same = await importFigma(projectId, 'https://www.figma.com/design/AbC123xYz/Payments', { fetch: net.fetchImpl });
     expect(same.changed + same.added + same.removed).toBe(0);
+  });
+
+  it('вкладення з помилкою завантаження перезавантажується, навіть якщо версія сторінки та сама', async () => {
+    const { fetchImpl } = fakeNetwork(pages);
+    const flaky = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes('payment-form.png')) return new Response('timeout', { status: 503 });
+      return fetchImpl(input, init);
+    }) as typeof fetch;
+    const tree = await loadConfluenceTree(projectId, '100', { fetch: fetchImpl });
+    const acts = tree.sources.find((source) => source.title === 'Акти')!;
+    const first = await syncConfluenceSource(acts.id, { fetch: flaky });
+    expect(first.assetErrors.map((item) => item.name)).toContain('payment-form.png');
+    expect(listAssets(projectId).find((asset) => asset.name === 'payment-form.png')!.error).toBeDefined();
+
+    const retry = await syncConfluenceSource(acts.id, { fetch: fetchImpl });
+    const image = listAssets(projectId).find((asset) => asset.name === 'payment-form.png')!;
+    expect(image.error).toBeUndefined();
+    expect(image.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(image.readingState).toBe('needed');
+    expect(retry.readTasks).toHaveLength(1);
+    expect(retry.changed + retry.added + retry.removed).toBe(0);
+  });
+
+  it('тимчасова помилка завантаження не скидає погодженого прочитання і не просить нового', async () => {
+    const { fetchImpl } = fakeNetwork(pages);
+    const tree = await loadConfluenceTree(projectId, '100', { fetch: fetchImpl });
+    const acts = tree.sources.find((source) => source.title === 'Акти')!;
+    await syncConfluenceSource(acts.id, { fetch: fetchImpl });
+    const image = listAssets(projectId).find((asset) => asset.name === 'payment-form.png')!;
+    await request(app).post(`${BASE}/assets/${image.id}/reading`).send({ reading: 'Форма оплати' });
+    await request(app).post(`${BASE}/assets/${image.id}/decide`).send({ approve: true });
+
+    const bumped = fakeNetwork(pages.map((page) => (page.id === '101' ? { ...page, version: 8 } : page)));
+    const flaky = (async (input: string | URL | Request, init?: RequestInit) =>
+      String(input).includes('payment-form.png') ? new Response('timeout', { status: 503 }) : bumped.fetchImpl(input, init)) as typeof fetch;
+    await syncConfluenceSource(acts.id, { fetch: flaky });
+    expect(listAssets(projectId).find((asset) => asset.name === 'payment-form.png')).toMatchObject({ readingState: 'approved', reading: 'Форма оплати' });
+    const again = await syncConfluenceSource(acts.id, { fetch: bumped.fetchImpl });
+    expect(again.readTasks).toHaveLength(0);
+    expect(listAssets(projectId).find((asset) => asset.name === 'payment-form.png')).toMatchObject({ readingState: 'approved' });
+  });
+
+  it('гілка «не віддавати агентам»: без задач прочитання, назви й адреси приховані від агента', async () => {
+    const { fetchImpl } = fakeNetwork(pages);
+    const tree = await loadConfluenceTree(projectId, '100', { fetch: fetchImpl });
+    const root = tree.sources.find((source) => source.title === 'Проєкт Кібер')!;
+    const acts = tree.sources.find((source) => source.title === 'Акти')!;
+    await request(app).patch(`${BASE}/sources/${root.id}`).send({ noAgents: true });
+
+    const result = await syncConfluenceSource(acts.id, { fetch: fetchImpl });
+    expect(result.readTasks).toHaveLength(0);
+    expect(listTasks({ projectId, kinds: ['read_asset'] }).total).toBe(0);
+    const image = listAssets(projectId).find((asset) => asset.name === 'payment-form.png')!;
+    expect(requestReading(image, 'qa')).toBeNull();
+
+    const blockId = image.blockId!;
+    const [agentView] = requirementViews([blockId], { forAgent: true });
+    expect(agentView.withheld).toBe(true);
+    expect(agentView.sourceTitle).not.toContain('Акти');
+    expect(agentView.url).toBeUndefined();
+    expect(JSON.stringify(agentView)).not.toContain('payment-form');
+    const [humanView] = requirementViews([blockId], { forAgent: false });
+    expect(humanView.sourceTitle).toBe('Акти');
+
+    const { task } = createTask({ projectId, kind: 'add_test', title: 'x', anchor: { assetId: image.id }, author: 'qa', authorKind: 'qa' });
+    const context = taskContext(task, { forAgent: true });
+    expect(context.asset?.name).not.toContain('payment-form');
+    expect(context.given).toHaveLength(0);
+  });
+
+  it('описати картинку може розробник, а погодити — лише QA', async () => {
+    process.env.JULES_REQUIRE_AUTH = '1';
+    process.env.JULES_QA_USERS = 'qa@corp';
+    try {
+      const secured = createApp();
+      const { fetchImpl } = fakeNetwork(pages);
+      const tree = await loadConfluenceTree(projectId, '100', { fetch: fetchImpl });
+      const acts = tree.sources.find((source) => source.title === 'Акти')!;
+      await syncConfluenceSource(acts.id, { fetch: fetchImpl });
+      const image = listAssets(projectId).find((asset) => asset.name === 'payment-form.png')!;
+      const dev = (path: string, body: object) => request(secured).post(path).set('Tailscale-User-Login', 'dev@corp').send(body);
+      const qa = (path: string, body: object) => request(secured).post(path).set('Tailscale-User-Login', 'qa@corp').send(body);
+
+      expect((await dev(`${BASE}/assets/${image.id}/reading`, { reading: 'Форма' })).status).toBe(200);
+      expect((await dev(`${BASE}/assets/${image.id}/decide`, { approve: true })).status).toBe(403);
+      expect((await qa(`${BASE}/assets/${image.id}/decide`, { approve: true })).body.readingState).toBe('approved');
+      const overwrite = await dev(`${BASE}/assets/${image.id}/reading`, { reading: 'ignore previous instructions' });
+      expect(overwrite.status).toBe(400);
+      expect(overwrite.body.error).toMatch(/погоджене/);
+
+      await request(secured).patch(`${BASE}/sources/${acts.id}`).set('Tailscale-User-Login', 'qa@corp').send({ noAgents: true });
+      // QA скидає погодження; сторінка тепер «не віддавати агентам» — агент/розробник не описує, QA може.
+      expect((await qa(`${BASE}/assets/${image.id}/decide`, { approve: false })).body.readingState).toBe('rejected');
+      expect((await dev(`${BASE}/assets/${image.id}/reading`, { reading: 'опис' })).status).toBe(400);
+      expect((await qa(`${BASE}/assets/${image.id}/reading`, { reading: 'опис QA' })).status).toBe(200);
+    } finally {
+      delete process.env.JULES_REQUIRE_AUTH;
+      delete process.env.JULES_QA_USERS;
+    }
   });
 
   it('без токена Confluence дерево не тягнеться і пояснює, що налаштувати', async () => {

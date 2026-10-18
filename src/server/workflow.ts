@@ -16,6 +16,7 @@ import { upsertDefect } from '../registry/defects-store.js';
 import { requireProject } from '../registry/projects-store.js';
 import { enqueueNotification } from '../registry/notifications-store.js';
 import { query, type Row } from '../registry/db.js';
+import { isNoAgents } from '../registry/sources-store.js';
 import type { Asset, Proposal, Task } from '../registry/types.js';
 
 /** Після погодження пропозицій: задачі на тести й закриття задач плану. */
@@ -176,6 +177,8 @@ export function afterIngest(projectId: string, event: 'pr' | 'main' | 'local', s
 /** Картинка, зміст якої лише в пікселях, → агент описує, QA погоджує. */
 export function requestReading(asset: Asset, author: string, authorKind: ActorKind = 'system'): string | null {
   if (asset.readingState !== 'needed') return null;
+  // Сторінка (або її предок) «не віддавати агентам»: картинку читає лише QA, задачі агентам немає.
+  if (isNoAgents(asset.sourceId)) return null;
   const { task, created } = createTask({
     projectId: asset.projectId,
     kind: 'read_asset',
@@ -189,10 +192,14 @@ export function requestReading(asset: Asset, author: string, authorKind: ActorKi
   return created ? task.id : null;
 }
 
-/** Задача «спланувати модуль», якщо для модуля ще немає відкритої. */
+/**
+ * Задача «спланувати модуль», якщо модуль ще не планували. Закритий чи
+ * відхилений план не перезапускається повторним призначенням модулів;
+ * невдалий — повертається в чергу через дедуплікацію.
+ */
 export function requestModulePlan(projectId: string, sectionId: string, sectionName: string, author: string): string | null {
-  const open = listTasks({ projectId, kinds: ['plan_module'], sectionId, states: ['queued', 'claimed', 'needs_info', 'review'] });
-  if (open.total > 0) return null;
+  const planned = listTasks({ projectId, kinds: ['plan_module'], sectionId, states: ['new', 'queued', 'claimed', 'needs_info', 'review', 'done', 'rejected'] });
+  if (planned.total > 0) return null;
   const { task, created } = createTask({
     projectId,
     kind: 'plan_module',

@@ -33,7 +33,7 @@ import {
   parseFigmaUrl,
   type FigmaFrame,
 } from '../integrations/figma.js';
-import { pruneBlockAssets, storeAssetFile, upsertAsset } from '../registry/assets-store.js';
+import { listAssets, pruneBlockAssets, storeAssetFile, upsertAsset } from '../registry/assets-store.js';
 import { createProposal, type CreateProposalInput } from '../registry/proposals-store.js';
 import { requireProject, updateProject } from '../registry/projects-store.js';
 import { createSection, getSectionByName } from '../registry/sections-store.js';
@@ -177,7 +177,8 @@ async function ingestAssetRef(
       if (ref.source === 'attachment' && !ref.page) {
         file = await downloadAttachment(pageId, ref.name, opts);
       } else if (ref.source === 'url' && ref.url) {
-        if (allowedAssetHost(ref.url)) file = await downloadUrl(ref.url, opts);
+        // Перенаправлення перевіряються тим самим списком хостів (захист від SSRF).
+        if (allowedAssetHost(ref.url)) file = await downloadUrl(ref.url, { ...opts, allowHost: allowedAssetHost });
         else error = 'Зовнішнє зображення не завантажено: хоста немає в JULES_ASSET_HOSTS';
       } else {
         error = 'Вкладення з іншої сторінки — відкрийте ту сторінку в дереві';
@@ -246,7 +247,37 @@ export interface SyncResult {
   assetErrors: Array<{ name: string; error: string }>;
 }
 
-/** Тіло однієї сторінки → блоки, вкладення, зв'язки. Без змін версії — нічого не робить. */
+/** Повтор вкладень сторінки з помилкою останнього завантаження (блоки не змінюються). */
+async function retryFailedAssets(
+  source: Source,
+  html: string,
+  options: InputOptions,
+  author: string,
+  empty: SyncResult,
+): Promise<SyncResult> {
+  const failed = listAssets(source.projectId, { sourceId: source.id }).filter((asset) => asset.error);
+  if (failed.length === 0 || !source.externalId) return empty;
+  const outcome: SyncResult = { ...empty, readTasks: [], assetErrors: [] };
+  const byPosition = new Map(liveBlocks(source.id).map((block) => [block.position, block]));
+  for (const raw of splitIntoBlocksWithAssets(html)) {
+    const block = byPosition.get(raw.position);
+    if (!block) continue;
+    for (const ref of raw.assets) {
+      const wanted = failed.some((asset) => asset.blockId === block.id && asset.kind === ref.kind && asset.name === ref.name);
+      if (!wanted) continue;
+      const assetOutcome = await ingestAssetRef(source, source.externalId, block.id, ref, options, author);
+      outcome.assets += 1;
+      if (assetOutcome.readTask) outcome.readTasks.push(assetOutcome.readTask);
+      if (assetOutcome.error) outcome.assetErrors.push({ name: assetOutcome.name, error: assetOutcome.error });
+    }
+  }
+  return outcome;
+}
+
+/**
+ * Тіло однієї сторінки → блоки, вкладення, зв'язки. Без змін версії блоки не
+ * чіпаються, лише повторюються вкладення з помилкою завантаження.
+ */
 export async function syncConfluenceSource(sourceId: string, options: InputOptions & { force?: boolean } = {}): Promise<SyncResult> {
   const source = requireSource(sourceId);
   if (source.kind !== 'confluence' || !source.externalId) throw new Error('Це джерело не є сторінкою Confluence');
@@ -267,8 +298,10 @@ export async function syncConfluenceSource(sourceId: string, options: InputOptio
     const page = await fetchConfluencePage({ pageId: source.externalId }, requestOptions(options));
     const hasBlocks = liveBlocks(sourceId).length > 0;
     if (!options.force && hasBlocks && page.version === source.externalVersion) {
+      // Сторінка та сама, але вкладення, що минулого разу не завантажились, пробуємо знову.
+      const retried = await retryFailedAssets(source, page.html, options, author, empty);
       markSourceChecked(sourceId);
-      return empty;
+      return retried;
     }
 
     const parsed = splitIntoBlocksWithAssets(page.html);

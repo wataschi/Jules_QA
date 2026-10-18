@@ -4,7 +4,7 @@
  */
 import { listProjects } from '../registry/projects-store.js';
 import { expireLeases, staleTasks } from '../registry/tasks-store.js';
-import { enqueueNotification, markNotification, pendingNotifications } from '../registry/notifications-store.js';
+import { enqueueNotification, failNotification, markNotification, pendingNotifications, skipNotification } from '../registry/notifications-store.js';
 import { formatEvent, isTelegramConfigured, TelegramNotifier } from '../notify/telegram.js';
 import { registerBackgroundJob } from './background.js';
 import { runHealthChecks } from './health.js';
@@ -38,7 +38,8 @@ export async function deliverNotifications(fetchImpl?: typeof fetch): Promise<{ 
   for (const item of pendingNotifications()) {
     const project = item.projectId ? projects.get(item.projectId) : undefined;
     if (project && project.settings.telegram && !project.settings.telegram.enabled) {
-      markNotification(item.id, { sent: false, error: 'сповіщення проєкту вимкнено' });
+      // Закриваємо з причиною, інакше вимкнений проєкт назавжди займає голову черги.
+      skipNotification(item.id, 'disabled');
       continue;
     }
     const chatId = project?.settings.telegram?.chatId || process.env.TELEGRAM_CHAT_ID || '';
@@ -47,7 +48,7 @@ export async function deliverNotifications(fetchImpl?: typeof fetch): Promise<{ 
       markNotification(item.id, { sent: true });
       sent += 1;
     } catch (error) {
-      markNotification(item.id, { sent: false, error: error instanceof Error ? error.message : String(error) });
+      failNotification(item.id, error instanceof Error ? error.message : String(error));
       failed += 1;
     }
   }
@@ -61,8 +62,13 @@ export async function maybePublishWeekly(now = new Date()): Promise<string[]> {
   const done: string[] = [];
   for (const project of listProjects()) {
     if (!project.settings.jira || publishedWeekly(project.id, week)) continue;
-    await publishWeekly(project.id, { week });
-    done.push(project.id);
+    // Помилка одного проєкту (Jira, права, дані) не зупиняє звітів інших; наступна спроба — за пів години.
+    try {
+      await publishWeekly(project.id, { week });
+      done.push(project.id);
+    } catch (error) {
+      console.warn(`Тижневий звіт ${project.key} за ${week} не опубліковано: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   return done;
 }

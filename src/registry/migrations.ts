@@ -571,6 +571,19 @@ export const migrations: Migration[] = [
       db.exec(V2_SQL);
     },
   },
+  {
+    // Повтори сповіщень: пауза між спробами, ліміт спроб і причина пропуску
+    // (вимкнений проєкт, вичерпані спроби) — щоб невідправне не блокувало чергу.
+    id: '003_notifications_retry',
+    up: (db) => {
+      db.exec(`
+ALTER TABLE notifications ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE notifications ADD COLUMN next_try_at TEXT;
+ALTER TABLE notifications ADD COLUMN skipped_reason TEXT;
+CREATE INDEX idx_notifications_pending ON notifications(sent_at, next_try_at, created_at);
+`);
+    },
+  },
 ];
 
 /** Проганяє всі незастосовані міграції. Безпечно викликати багато разів. */

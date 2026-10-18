@@ -341,6 +341,12 @@ export interface NotificationItem {
   createdAt: string;
   sentAt?: string;
   error?: string;
+  /** Скільки разів відправка не вдалася. */
+  attempts?: number;
+  /** Наступна спроба не раніше цього часу. */
+  nextTryAt?: string;
+  /** Закрито без відправки: вимкнено для проєкту або вичерпано спроби. */
+  skippedReason?: 'disabled' | 'failed';
 }
 
 export interface PushCheck {

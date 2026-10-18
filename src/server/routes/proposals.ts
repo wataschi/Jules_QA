@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { proposalKindSchema, proposalStateSchema, skillNameSchema } from '../../registry/types.js';
 import { requireProject } from '../../registry/projects-store.js';
 import { approveProposals, createProposal, deleteProposal, getProposal, listProposals, patchProposal, rejectProposals } from '../../registry/proposals-store.js';
-import { requestAuthor } from '../auth.js';
+import { requestAuthor, requireRole } from '../auth.js';
 import { afterProposalsApproved, afterProposalsRejected } from '../workflow.js';
 import { fail, asInt, requireProjectId, withBlockQuote } from './common.js';
 
@@ -63,10 +63,12 @@ export function registerProposalsRoutes(router: Router): void {
 
   router.post('/proposals/approve', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z
-        .object({ ids: z.array(z.string().min(1)).min(1), reviewer: z.string().optional() })
+        .object({ ids: z.array(z.string().min(1)).min(1) })
         .parse(req.body);
-      const reviewer = body.reviewer ?? requestAuthor(req);
+      // Рецензент — завжди той, хто погоджує: підставити чужий логін не можна.
+      const reviewer = requestAuthor(req);
       const result = approveProposals(body.ids, reviewer);
       const tasks = afterProposalsApproved(body.ids, result, reviewer);
       res.json({ ...result, tasks });
@@ -77,14 +79,14 @@ export function registerProposalsRoutes(router: Router): void {
 
   router.post('/proposals/reject', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z
         .object({
           ids: z.array(z.string().min(1)).min(1),
           note: z.string().optional(),
-          reviewer: z.string().optional(),
         })
         .parse(req.body);
-      const reviewer = body.reviewer ?? requestAuthor(req);
+      const reviewer = requestAuthor(req);
       const result = rejectProposals(body.ids, body.note, reviewer);
       const rejected = result.rejected.map((id) => getProposal(id)).filter((item): item is NonNullable<typeof item> => Boolean(item));
       const tasks = afterProposalsRejected(rejected, reviewer);
@@ -96,6 +98,7 @@ export function registerProposalsRoutes(router: Router): void {
 
   router.patch('/proposals/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       const body = z
         .object({
           payload: z.unknown().optional(),
@@ -114,6 +117,7 @@ export function registerProposalsRoutes(router: Router): void {
 
   router.delete('/proposals/:id', (req, res) => {
     try {
+      requireRole(req, 'qa');
       if (!getProposal(req.params.id)) {
         res.status(404).json({ error: `Пропозицію «${req.params.id}» не знайдено` });
         return;

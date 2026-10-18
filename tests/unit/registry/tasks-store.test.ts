@@ -10,6 +10,7 @@ import {
   createTask,
   expireLeases,
   inbox,
+  isOwner,
   listEvents,
   listTasks,
   rejectTask,
@@ -17,6 +18,7 @@ import {
   reportTask,
   requestChanges,
   requireTask,
+  retryTask,
   resolveOwners,
   sectionForFile,
   staleTasks,
@@ -24,6 +26,8 @@ import {
 import { updateSection } from '../../../src/registry/sections-store.js';
 import { updateProject } from '../../../src/registry/projects-store.js';
 import { execute } from '../../../src/registry/db.js';
+import { upsertPullRequest } from '../../../src/registry/code-tests-store.js';
+import { failTask } from '../../../src/registry/tasks-store.js';
 
 describe('сховище задач для агентів', () => {
   let temp: TempRegistry;
@@ -156,6 +160,48 @@ describe('сховище задач для агентів', () => {
     expect(confirmTask(task.id, 'qa@corp').state).toBe('done');
   });
 
+  it('після «інакше» новий PR має бути злитий сам: злиття старого не закриває задачу', () => {
+    const task = qaTask();
+    claimTask(task.id, 'dev@corp');
+    reportTask(task.id, 'dev@corp', { summary: 's', prUrl: 'https://github.com/acme/app/pull/5' });
+    applyPrEvent(fx.project.id, 5, 'merged');
+    requestChanges(task.id, 'qa@corp', 'Ще перевірити нуль');
+    claimTask(task.id, 'dev@corp');
+    const second = reportTask(task.id, 'dev@corp', { summary: 's2', prUrl: 'https://github.com/acme/app/pull/7' });
+    expect(second.mergedAt).toBeUndefined();
+    expect(confirmTask(task.id, 'qa@corp').state).toBe('review');
+    applyPrEvent(fx.project.id, 7, 'merged');
+    expect(requireTask(task.id).state).toBe('done');
+  });
+
+  it('PR, злитий ще до звіту агента, зараховується одразу', () => {
+    const task = qaTask();
+    upsertPullRequest(fx.project.id, 11, { state: 'merged' });
+    claimTask(task.id, 'dev@corp');
+    const reported = reportTask(task.id, 'dev@corp', { summary: 's', prUrl: 'https://github.com/acme/app/pull/11' });
+    expect(reported.mergedAt).toBeDefined();
+    expect(confirmTask(task.id, 'qa@corp').state).toBe('done');
+  });
+
+  it('невдалу задачу QA повертає в чергу, і агент може взяти її знову', () => {
+    const task = qaTask();
+    claimTask(task.id, 'dev@corp');
+    failTask(task.id, 'dev@corp', 'не збирається');
+    expect(inbox(fx.project.id, { login: 'dev@corp' }).tasks.map((item) => item.id)).not.toContain(task.id);
+    expect(retryTask(task.id, 'qa@corp', 'qa').state).toBe('queued');
+    expect(claimTask(task.id, 'dev@corp').state).toBe('claimed');
+  });
+
+  it('повторне створення з тим самим ключем повертає невдалу задачу в чергу, а не мовчить', () => {
+    const first = qaTask({ kind: 'triage', dedupKey: 'triage:t1', authorKind: 'system', author: 'jules' });
+    claimTask(first.id, 'dev@corp');
+    failTask(first.id, 'dev@corp', 'не вийшло');
+    const again = createTask({ projectId: fx.project.id, kind: 'triage', title: 'Знову впав', author: 'jules', authorKind: 'system', dedupKey: 'triage:t1' });
+    expect(again.created).toBe(false);
+    expect(again.task.id).toBe(first.id);
+    expect(again.task.state).toBe('queued');
+  });
+
   it('PR закрито без злиття — задача знову в черзі', () => {
     const task = qaTask();
     claimTask(task.id, 'dev@corp');
@@ -206,6 +252,18 @@ describe('сховище задач для агентів', () => {
     reportTask(task.id, 'dev@corp', { summary: 's', prUrl: 'https://github.com/acme/app/pull/5' });
     confirmTask(task.id, 'qa@corp');
     expect(acceptanceByModel(fx.project.id)).toEqual([{ model: 'model-a', reported: 1, firstTime: 1 }]);
+  });
+
+  it('хендл із CODEOWNERS збігається з логіном Tailscale за частиною до @', () => {
+    expect(isOwner(['@alice'], 'alice@corp')).toBe(true);
+    expect(isOwner(['@Alice'], 'alice@github')).toBe(true);
+    expect(isOwner(['alice@corp'], 'alice@corp')).toBe(true);
+    expect(isOwner(['@bob'], 'alice@corp')).toBe(false);
+    expect(isOwner(['@org/team'], 'org@corp')).toBe(false);
+    updateSection(fx.child.id, { owners: ['@alice'] });
+    const task = qaTask({ anchor: { file: 'src/acts/form.ts' } });
+    expect(task.owners).toEqual(['@alice']);
+    expect(listTasks({ projectId: fx.project.id, owner: 'alice@corp' }).items.map((item) => item.id)).toContain(task.id);
   });
 
   it('фільтрує перелік за станом і власником', () => {

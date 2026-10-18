@@ -96,6 +96,9 @@ export interface Section {
   code: string;
   position: number;
   testrailSectionId?: number;
+  /** Шляхи коду модуля (glob) і власники — для маршрутизації задач. */
+  paths?: string[];
+  owners?: string[];
   createdAt: string;
   updatedAt: string;
 }

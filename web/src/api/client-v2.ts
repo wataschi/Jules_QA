@@ -13,6 +13,7 @@ import type {
   NotificationItem,
   Page,
   Project,
+  ProjectSettings,
   PushCheck,
   ReadingState,
   RequirementView,
@@ -50,6 +51,7 @@ export interface V2Api {
   confirmTask(id: string, signal?: AbortSignal): Promise<Task>;
   requestTaskChanges(id: string, text: string, signal?: AbortSignal): Promise<Task>;
   rejectTask(id: string, note?: string, signal?: AbortSignal): Promise<Task>;
+  retryTask(id: string, signal?: AbortSignal): Promise<Task>;
 
   getSourceTree(projectId: string, signal?: AbortSignal): Promise<SourceNode[]>;
   patchSourceFlags(id: string, flags: { included?: boolean; noAgents?: boolean; sectionId?: string | null }, signal?: AbortSignal): Promise<SourceNode>;
@@ -78,7 +80,12 @@ export interface V2Api {
   publishWeekly(projectId: string, input: { week?: string; insights?: string }, signal?: AbortSignal): Promise<{ week: string; jira?: { key: string; url: string; created: boolean } }>;
   listNotifications(signal?: AbortSignal): Promise<{ configured: boolean; items: NotificationItem[] }>;
   testNotification(signal?: AbortSignal): Promise<{ ok: boolean }>;
-  patchProjectV2(id: string, patch: Partial<Pick<Project, 'repo' | 'settings' | 'name' | 'description'>>, signal?: AbortSignal): Promise<Project>;
+  /** `settings` зливається з наявними на сервері; `null` у ключі прибирає його. */
+  patchProjectV2(
+    id: string,
+    patch: Partial<Pick<Project, 'repo' | 'name' | 'description'>> & { settings?: { [K in keyof ProjectSettings]?: ProjectSettings[K] | null } },
+    signal?: AbortSignal,
+  ): Promise<Project>;
   patchSection(id: string, patch: { paths?: string[]; owners?: string[]; name?: string }, signal?: AbortSignal): Promise<unknown>;
 }
 
@@ -111,6 +118,7 @@ export const httpApiV2: V2Api = {
   confirmTask: (id, signal) => request<Task>(`${R}/tasks/${enc(id)}/confirm`, { method: 'POST', body: {}, signal }),
   requestTaskChanges: (id, text, signal) => request<Task>(`${R}/tasks/${enc(id)}/request-changes`, { method: 'POST', body: { text }, signal }),
   rejectTask: (id, note, signal) => request<Task>(`${R}/tasks/${enc(id)}/reject`, { method: 'POST', body: { note }, signal }),
+  retryTask: (id, signal) => request<Task>(`${R}/tasks/${enc(id)}/retry`, { method: 'POST', body: {}, signal }),
 
   getSourceTree: (projectId, signal) => request<SourceNode[]>(`${R}/sources/tree${qs({ projectId })}`, { signal }),
   patchSourceFlags: (id, flags, signal) => request<SourceNode>(`${R}/sources/${enc(id)}`, { method: 'PATCH', body: flags, signal }),

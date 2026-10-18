@@ -11,7 +11,7 @@ import { formatAgo, formatDateTime } from '../../utils/format';
 import { PR_KINDS, isOpenState } from './bits';
 import { T } from './strings';
 
-export type TaskAction = 'confirm' | 'changes' | 'reject' | 'answer' | 'comment';
+export type TaskAction = 'confirm' | 'changes' | 'reject' | 'retry' | 'answer' | 'comment';
 
 export function TaskActions({
   task,
@@ -114,6 +114,17 @@ export function TaskActions({
             {!task.qaConfirmedAt && (
               <p className="text-xs muted">{viaPr ? T.actions.confirmPrHint(prLabel) : T.actions.confirmNoPrHint}</p>
             )}
+          </div>
+        )}
+
+        {task.state === 'failed' && (
+          <div className="tasks-decide">
+            <div className="tasks-confirm">
+              <button type="button" className="btn btn-primary" disabled={locked} onClick={() => void submit('retry', undefined, () => undefined)}>
+                {busy === 'retry' ? S.common.loading : `↻ ${T.actions.retry}`}
+              </button>
+            </div>
+            <p className="text-xs muted">{T.actions.retryHint}</p>
           </div>
         )}
 

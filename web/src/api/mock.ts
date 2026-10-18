@@ -107,6 +107,8 @@ interface FlatSection {
   name: string;
   code: string;
   position: number;
+  paths?: string[];
+  owners?: string[];
 }
 
 const flatSections: FlatSection[] = [
@@ -695,6 +697,8 @@ function buildTree(): SectionNode[] {
       code: s.code,
       position: s.position,
       path: sectionPath(s.id),
+      paths: s.paths ?? [],
+      owners: s.owners ?? [],
       caseCount: own,
       caseCountDeep: cases.filter((c) => deepIds.includes(c.sectionId)).length,
       children,
@@ -1540,7 +1544,7 @@ export const mockApi: JulesApi = {
       { role: 'planning' as const, label: 'Генерація кейсів (planner)', configured: true, ok: true, baseUrl: 'http://localhost:1234/v1', model: 'qwen3-vl', modelAvailable: true, models: ['qwen3-vl'] },
       { role: 'critic' as const, label: 'Перевірка згенерованого (critic)', configured: true, ok: false, baseUrl: 'http://localhost:8888/v1', model: 'qwen3-vl', error: 'ECONNREFUSED' },
     ],
-    confluence: { configured: false },
+    confluence: { configured: true, baseUrl: 'https://confluence.corp.local' },
     testrail: { configured: false },
     registry: { db: 'data/registry.db', node: '24.0.0' },
   }),
@@ -1635,10 +1639,20 @@ export const mockApi: JulesApi = {
     const settings = project.settings ?? { confluenceRoots: [], figmaFiles: [], telegram: { enabled: false }, thresholds: { staleTaskHours: 24, leaseMinutes: 30, mutationP1: 60, flakeScore: 0.3 } };
     const merged = { ...settings } as Record<string, unknown>;
     for (const [key, value] of Object.entries(patch.settings ?? {})) {
+      if (value === null) {
+        delete merged[key];
+        continue;
+      }
       const before = merged[key];
       merged[key] = value && typeof value === 'object' && !Array.isArray(value) && before && typeof before === 'object' ? { ...before, ...value } : value;
     }
     Object.assign(project, patch, { settings: merged, updatedAt: new Date().toISOString() });
     return delay(project, 160, signal);
+  },
+  patchSection: (id, patch, signal) => {
+    const section = flatSections.find((item) => item.id === id);
+    if (!section) return Promise.reject(new ApiError(`Секцію «${id}» не знайдено`, 404, `/sections/${id}`));
+    Object.assign(section, patch);
+    return delay({ ...section }, 120, signal);
   },
 };

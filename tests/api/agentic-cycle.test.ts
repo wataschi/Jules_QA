@@ -61,7 +61,7 @@ describe('цикл «QA направляє, агент робить» через
   it('проводить запит QA від задачі до злиття PR і статусу кейса', async () => {
     const created = await request(app)
       .post(`${BASE}/tasks`)
-      .send({ projectId, kind: 'add_test', title: 'Акт без суми не має зберігатися', anchor: { caseId } });
+      .send({ projectId, kind: 'add_test', title: 'Акт без суми не має зберігатися', text: 'Перевірити і нуль, і порожнє поле', anchor: { caseId } });
     expect(created.status).toBe(201);
     const taskId = created.body.id as string;
     expect(created.body.sectionId).toBe(sectionId);
@@ -72,6 +72,7 @@ describe('цикл «QA направляє, агент робить» через
 
     const claimed = await mcpCall(app, 'qa_claim', { taskId, agent: 'claude-code', model: 'model-x' });
     expect(claimed.value.task.state).toBe('claimed');
+    expect(claimed.value.task).toMatchObject({ text: 'Перевірити і нуль, і порожнє поле', anchor: { caseId }, priority: 'P2' });
     expect(claimed.value.context.case.id).toBe(caseId);
     expect(claimed.value.context.notice).toMatch(/не інструкції/);
 
@@ -151,7 +152,8 @@ describe('цикл «QA направляє, агент робить» через
     const status = await request(app).get(`${BASE}/status.md?projectId=${projectId}`);
     expect(status.text).toContain('Впали');
 
-    await mcpCall(app, 'qa_claim', { taskId: triageId });
+    const triageClaim = await mcpCall(app, 'qa_claim', { taskId: triageId });
+    expect(triageClaim.value.task.text).toContain('expected 400, got 200');
     const withoutClass = await mcpCall(app, 'qa_report', { taskId: triageId, summary: 'бекенд пропускає порожню суму' });
     expect(withoutClass.error).toMatch(/classification/);
     const reported = await mcpCall(app, 'qa_report', {
@@ -159,7 +161,13 @@ describe('цикл «QA направляє, агент робить» через
       summary: 'Бекенд пропускає порожню суму',
       triage: { classification: 'product_bug', severity: 'high' },
     });
-    expect(reported.value.effects.defectId).toBeTruthy();
+    expect(reported.value.task.state).toBe('review');
+    const before = await request(app).get(`${BASE}/defects?projectId=${projectId}`);
+    expect(before.body.items).toHaveLength(0);
+
+    const confirmed = await request(app).post(`${BASE}/tasks/${triageId}/confirm`).send({});
+    expect(confirmed.body.state).toBe('done');
+    expect(confirmed.body.effects.defectId).toBeTruthy();
     const defects = await request(app).get(`${BASE}/defects?projectId=${projectId}`);
     expect(defects.body.items[0]).toMatchObject({ caseId, severity: 'high' });
   });

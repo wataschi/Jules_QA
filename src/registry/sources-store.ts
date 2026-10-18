@@ -404,6 +404,23 @@ export function sourceTree(projectId: string): SourceTreeNode[] {
   return roots;
 }
 
+/**
+ * Чи закрите джерело для агентів: позначка «не віддавати агентам» на ньому
+ * самому або на будь-якому предку в дереві (дочірні сторінки її успадковують).
+ */
+export function isNoAgents(sourceId: string | undefined | null): boolean {
+  const seen = new Set<string>();
+  let current = sourceId ?? null;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const row = queryOne<Row>('SELECT parent_id, no_agents FROM sources WHERE id = ?', [current]);
+    if (!row) return false;
+    if (Number(row.no_agents) === 1) return true;
+    current = (row.parent_id as string | null) ?? null;
+  }
+  return false;
+}
+
 /** Нащадки джерела в дереві (без нього самого). */
 export function descendantSourceIds(id: string): string[] {
   const out: string[] = [];

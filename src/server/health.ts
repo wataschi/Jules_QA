@@ -47,7 +47,7 @@ export function recordHealth(target: string, ok: boolean, error?: string, detail
   if (changed && previous && !ok) enqueueNotification({ kind: 'source_down', source: label, since, error });
   if (changed && previous && ok) {
     const downMinutes = Math.round((Date.parse(at) - Date.parse(String(previous.since))) / 60_000);
-    enqueueNotification({ kind: 'source_up', source: label, downMinutes });
+    enqueueNotification({ kind: 'source_up', source: label, downMinutes, since: String(previous.since) });
   }
   return rowToHealth(queryOne<Row>('SELECT * FROM health_checks WHERE target = ?', [target]) as Row);
 }

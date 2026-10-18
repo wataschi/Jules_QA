@@ -29,7 +29,7 @@ test.describe('Огляд і налаштування Jules 2.0', () => {
 
     await page.getByRole('link', { name: /Чекає вашого рішення/ }).click();
     await expect(page).toHaveURL(/\/tasks\?.*state=review/);
-    await expect(page).toHaveURL(/state=needs_info/);
+    await expect(page).toHaveURL(/needs_info/);
   });
 
   test('«Бачив» прибирає коміт повз PR з огляду', async ({ page }) => {
