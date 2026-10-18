@@ -26,6 +26,8 @@ import { z } from 'zod';
 import { getMidsceneRunRoot } from './data-paths.js';
 import { allowedLlmHosts, createAuthMiddleware, isLlmBaseUrlAllowed, warnIfApiUnprotected } from './auth.js';
 import { createRegistryRouter } from './registry-routes.js';
+import { createMcpHandler } from './mcp.js';
+import { registerCoreJobs } from './jobs.js';
 
 dotenv.config();
 
@@ -43,6 +45,18 @@ export function createApp(): express.Application {
 
   // Реєстр тест-кейсів. Міграції проганяються при монтуванні роутера.
   app.use('/api/registry', createRegistryRouter());
+  registerCoreJobs();
+
+  // MCP для агентів розробників: вхід той самий, що й для API.
+  app.all('/mcp', createMcpHandler());
+
+  // Зібраний CLI для CI й хуків репо продукту — публічний, це лише код.
+  app.get('/cli/jules-qa.mjs', (_req, res) => {
+    res.type('text/javascript; charset=utf-8');
+    res.sendFile(path.join(process.cwd(), 'dist', 'qa-cli', 'jules-qa.mjs'), (err) => {
+      if (err && !res.headersSent) res.status(404).type('text/plain').send('CLI не зібрано: npm run cli:build');
+    });
+  });
 
   app.get('/api/settings', async (_req, res) => {
     res.json(await loadSettings());
@@ -378,7 +392,7 @@ export function createApp(): express.Application {
   const webDist = path.join(process.cwd(), 'web', 'dist');
   app.use(express.static(webDist));
 
-  app.get(/^(?!\/api|\/reports).*/, (_req, res) => {
+  app.get(/^(?!\/api|\/reports|\/mcp|\/cli).*/, (_req, res) => {
     res.sendFile(path.join(webDist, 'index.html'), (err) => {
       if (err) res.status(404).send('UI not built. Run: npm run ui:build');
     });

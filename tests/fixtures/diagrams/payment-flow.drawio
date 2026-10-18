@@ -1,0 +1,64 @@
+<mxfile host="Confluence" modified="2026-09-01T10:00:00.000Z" agent="draw.io" version="24.7.5">
+  <diagram id="p1" name="Оплата">
+    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="pay" value="&lt;div&gt;&lt;b&gt;Оплата&lt;/b&gt;&lt;/div&gt;&lt;div&gt;карткою&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="100" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cart" value="Кошик" style="rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="120" height="60" as="geometry" />
+        </mxCell>
+        <UserObject label="Успіх&lt;br&gt;оплати" link="https://example.com" id="ok">
+          <mxCell style="html=1;" vertex="1" parent="1">
+            <mxGeometry x="500" y="40" width="120" height="60" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="err" value="Помилка&amp;nbsp;&amp;laquo;Недостатньо коштів&amp;raquo;" style="html=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="160" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="a &lt; b — примітка" style="shape=note;" vertex="1" parent="1">
+          <mxGeometry x="100" y="300" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="empty" value="" style="ellipse;" vertex="1" parent="1">
+          <mxGeometry x="300" y="300" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="сума &amp;gt; 0" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="cart" target="pay">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="pay" target="ok">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-label" value="банк підтвердив" style="edgeLabel;html=1;" vertex="1" connectable="0" parent="e3">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="pay" target="err">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="p2" name="Повернення">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="grp" value="Бекофіс" style="swimlane;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="400" height="200" as="geometry" />
+        </mxCell>
+        <object label="Заявка" id="req">
+          <mxCell vertex="1" parent="grp">
+            <mxGeometry x="20" y="40" width="100" height="40" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="done" value="Повернено" vertex="1" parent="grp">
+          <mxGeometry x="200" y="40" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" value="схвалено" edge="1" parent="grp" source="req" target="done">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

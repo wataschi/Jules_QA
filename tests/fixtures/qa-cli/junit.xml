@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="vitest tests" tests="4" failures="1" errors="0" time="0.5">
+  <testsuite name="src/acts/acts.test.ts" timestamp="2026-10-18T10:00:00.000Z" hostname="ci" tests="3" failures="1" errors="0" skipped="1" time="0.3">
+    <testcase classname="src/acts/acts.test.ts" name="Акти &gt; CYBER-ACT-014 акт без суми не зберігається" time="0.01">
+    </testcase>
+    <testcase classname="src/acts/acts.test.ts" name="Акти &gt; CYBER-ACT-021 акт із датою в майбутньому відхиляється" time="0.02">
+      <failure message="expected true to be false" type="AssertionError">AssertionError: expected true to be false</failure>
+    </testcase>
+    <testcase classname="src/acts/acts.test.ts" name="Акти &gt; чернетка без кейса" time="0">
+      <skipped/>
+    </testcase>
+  </testsuite>
+  <testsuite name="e2e/login.spec.ts" timestamp="2026-10-18T10:00:00.000Z" hostname="ci" tests="1" failures="0" errors="0" skipped="0" time="0.2">
+    <testcase classname="e2e/login.spec.ts" name="CYBER-AUTH-001 вхід з правильним паролем" time="0.2">
+    </testcase>
+  </testsuite>
+</testsuites>

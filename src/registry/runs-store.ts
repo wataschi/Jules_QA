@@ -82,6 +82,12 @@ function rowToRun(row: Row): RegistryRun {
     finishedAt: row.finished_at ?? undefined,
     summary: runSummary(String(row.id)),
     note: row.note ?? '',
+    sha: row.sha ?? undefined,
+    branch: row.branch ?? undefined,
+    prNumber: row.pr_number ?? undefined,
+    source: row.source ?? undefined,
+    event: row.event ?? undefined,
+    runUrl: row.run_url ?? undefined,
   });
 }
 

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="1" failures="1" skipped="1" tests="5" time="1.873" timestamp="2026-10-10T09:15:44.123456+00:00" hostname="runner-02"><testcase classname="tests.unit.test_acts" name="test_CYBER_ACT_014_act_without_amount_is_rejected" time="0.002" /><testcase classname="tests.unit.test_acts.TestActTotals" name="test_CYBER_ACT_015_sum_with_vat" time="0.011"><failure message="assert 120 == 121&#10; +  where 120 = total(...)">def test_CYBER_ACT_015_sum_with_vat(self):
+&gt;       assert total(act) == 121
+E       assert 120 == 121
+
+tests/unit/test_acts.py:31: AssertionError</failure></testcase><testcase classname="tests.unit.test_acts" name="test_export_pdf" time="0.000"><skipped type="pytest.skip" message="PDF ще не готовий">tests/unit/test_acts.py:40: PDF ще не готовий</skipped></testcase><testcase classname="tests.integration.test_db" name="test_connection" file="tests/integration/test_db.py" line="11" time="1.502"><error message="failed on setup with &quot;ConnectionRefusedError: [Errno 111]&quot;">@pytest.fixture
+def db():
+&gt;   return connect()
+E   ConnectionRefusedError: [Errno 111] Connection refused</error></testcase><testcase classname="tests.unit.test_parse" name="test_parse[case-1]" time="0.001" /></testsuite></testsuites>

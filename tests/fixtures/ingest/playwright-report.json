@@ -1,0 +1,194 @@
+{
+  "config": {
+    "configFile": "/home/runner/work/cyber/cyber/playwright.config.ts",
+    "rootDir": "/home/runner/work/cyber/cyber/e2e",
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": { "actualWorkers": 2 },
+    "preserveOutput": "always",
+    "reporter": [["json", { "outputFile": "test-results/playwright.json" }]],
+    "reportSlowTests": { "max": 5, "threshold": 300000 },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/home/runner/work/cyber/cyber/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {},
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/runner/work/cyber/cyber/e2e",
+        "testIgnore": [],
+        "testMatch": ["**/*.@(spec|test).?(c|m)[jt]s?(x)"],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/runner/work/cyber/cyber/test-results",
+        "repeatEach": 1,
+        "retries": 2,
+        "metadata": {},
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/home/runner/work/cyber/cyber/e2e",
+        "testIgnore": [],
+        "testMatch": ["**/*.@(spec|test).?(c|m)[jt]s?(x)"],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "version": "1.48.2",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "acts/acts.spec.ts",
+      "file": "acts/acts.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "сторінка актів відкривається",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                { "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 812, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-10-10T09:20:01.000Z", "attachments": [] }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "firefox",
+              "projectName": "firefox",
+              "results": [
+                { "workerIndex": 1, "parallelIndex": 1, "status": "passed", "duration": 1203, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-10-10T09:20:01.000Z", "attachments": [] }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8f2e1a6b4c-1d2e3f4a5b6c7d8e9f00",
+          "file": "acts/acts.spec.ts",
+          "line": 4,
+          "column": 5
+        }
+      ],
+      "suites": [
+        {
+          "title": "Акти",
+          "file": "acts/acts.spec.ts",
+          "line": 8,
+          "column": 6,
+          "specs": [
+            {
+              "title": "CYBER-ACT-014 акт без суми не зберігається",
+              "ok": true,
+              "tags": ["P1"],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0, "parallelIndex": 0, "status": "failed", "duration": 4120,
+                      "error": { "message": "\u001b[31mError: expect(locator).toBeVisible() failed\u001b[39m", "stack": "Error: expect(locator).toBeVisible() failed\n    at acts/acts.spec.ts:14:41" },
+                      "errors": [{ "message": "Error: expect(locator).toBeVisible() failed" }],
+                      "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-10-10T09:20:02.000Z", "attachments": []
+                    },
+                    { "workerIndex": 2, "parallelIndex": 0, "status": "passed", "duration": 2310, "errors": [], "stdout": [], "stderr": [], "retry": 1, "startTime": "2026-10-10T09:20:07.000Z", "attachments": [] }
+                  ],
+                  "status": "flaky"
+                },
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    { "workerIndex": 1, "parallelIndex": 1, "status": "passed", "duration": 2950, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-10-10T09:20:02.000Z", "attachments": [] }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8f2e1a6b4c-aa11bb22cc33dd44ee55",
+              "file": "acts/acts.spec.ts",
+              "line": 10,
+              "column": 7
+            }
+          ],
+          "suites": [
+            {
+              "title": "Видалення",
+              "file": "acts/acts.spec.ts",
+              "line": 20,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "CYBER-ACT-020 видалення з підтвердженням",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 30000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        { "workerIndex": 0, "parallelIndex": 0, "status": "timedOut", "duration": 30001, "error": { "message": "Test timeout of 30000ms exceeded." }, "errors": [{ "message": "Test timeout of 30000ms exceeded." }], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-10-10T09:20:12.000Z", "attachments": [] },
+                        { "workerIndex": 3, "parallelIndex": 0, "status": "timedOut", "duration": 30002, "error": { "message": "Test timeout of 30000ms exceeded." }, "errors": [{ "message": "Test timeout of 30000ms exceeded." }], "stdout": [], "stderr": [], "retry": 1, "startTime": "2026-10-10T09:20:43.000Z", "attachments": [] },
+                        { "workerIndex": 4, "parallelIndex": 0, "status": "timedOut", "duration": 30003, "error": { "message": "Test timeout of 30000ms exceeded." }, "errors": [{ "message": "Test timeout of 30000ms exceeded." }], "stdout": [], "stderr": [], "retry": 2, "startTime": "2026-10-10T09:21:14.000Z", "attachments": [] }
+                      ],
+                      "status": "unexpected"
+                    },
+                    {
+                      "timeout": 30000,
+                      "annotations": [{ "type": "skip", "description": "firefox ще не підтримує діалог" }],
+                      "expectedStatus": "skipped",
+                      "projectId": "firefox",
+                      "projectName": "firefox",
+                      "results": [
+                        { "workerIndex": -1, "parallelIndex": -1, "status": "skipped", "duration": 0, "errors": [], "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-10-10T09:20:12.000Z", "attachments": [] }
+                      ],
+                      "status": "skipped"
+                    }
+                  ],
+                  "id": "8f2e1a6b4c-ff66aa77bb88cc99dd00",
+                  "file": "acts/acts.spec.ts",
+                  "line": 22,
+                  "column": 9
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-10T09:20:00.512Z",
+    "duration": 75011.3,
+    "expected": 3,
+    "skipped": 1,
+    "unexpected": 1,
+    "flaky": 1
+  }
+}

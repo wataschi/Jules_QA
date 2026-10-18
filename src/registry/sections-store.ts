@@ -1,5 +1,5 @@
 /** Сховище секцій (дерево модулів проєкту). */
-import { execute, nowIso, query, queryOne, scalar, tx, type Row } from './db.js';
+import { execute, fromJson, nowIso, query, queryOne, scalar, toJson, tx, type Row } from './db.js';
 import { generateSectionCode, newId } from './ids.js';
 import { sectionInputSchema, sectionSchema, type Section, type SectionNode } from './types.js';
 
@@ -12,6 +12,8 @@ function rowToSection(row: Row): Section {
     code: row.code,
     position: Number(row.position ?? 0),
     testrailSectionId: row.testrail_section_id ?? undefined,
+    paths: fromJson<string[]>(row.paths, []),
+    owners: fromJson<string[]>(row.owners, []),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -65,6 +67,8 @@ export interface CreateSectionInput {
   code?: string;
   position?: number;
   testrailSectionId?: number;
+  paths?: string[];
+  owners?: string[];
 }
 
 export function createSection(input: CreateSectionInput): Section {
@@ -88,8 +92,8 @@ export function createSection(input: CreateSectionInput): Section {
 
     execute(
       `INSERT INTO sections
-         (id, project_id, parent_id, name, code, position, testrail_section_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, project_id, parent_id, name, code, position, testrail_section_id, paths, owners, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         parsed.projectId,
@@ -98,6 +102,8 @@ export function createSection(input: CreateSectionInput): Section {
         code,
         position,
         parsed.testrailSectionId ?? null,
+        toJson(parsed.paths ?? []),
+        toJson(parsed.owners ?? []),
         at,
         at,
       ],
@@ -111,6 +117,8 @@ export interface UpdateSectionPatch {
   parentId?: string | null;
   position?: number;
   testrailSectionId?: number;
+  paths?: string[];
+  owners?: string[];
 }
 
 export function updateSection(id: string, patch: UpdateSectionPatch): Section {
@@ -139,6 +147,14 @@ export function updateSection(id: string, patch: UpdateSectionPatch): Section {
   if (patch.testrailSectionId !== undefined) {
     sets.push('testrail_section_id = ?');
     params.push(patch.testrailSectionId);
+  }
+  if (patch.paths !== undefined) {
+    sets.push('paths = ?');
+    params.push(toJson(patch.paths));
+  }
+  if (patch.owners !== undefined) {
+    sets.push('owners = ?');
+    params.push(toJson(patch.owners));
   }
   if (sets.length === 0) return existing;
 

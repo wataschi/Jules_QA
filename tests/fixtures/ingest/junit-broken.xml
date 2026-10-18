@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="5">
+    <testsuite name="src/acts/acts.test.ts" tests="3">
+        <testcase classname="src/acts/acts.test.ts" name="Акти &gt; CYBER-ACT-014" time="0.003">
+        </testcase>
+        <testcase classname="src/acts/acts.test.ts" name="Акти &gt; рах

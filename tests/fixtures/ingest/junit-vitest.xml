@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="5" failures="1" errors="0" time="0.734">
+    <testsuite name="src/acts/acts.test.ts" timestamp="2026-10-10T09:12:01.512Z" hostname="runner-01" tests="3" failures="1" errors="0" skipped="1" time="0.0123">
+        <testcase classname="src/acts/acts.test.ts" name="Акти &gt; CYBER-ACT-014 акт без суми не зберігається" time="0.003">
+        </testcase>
+        <testcase classname="src/acts/acts.test.ts" name="Акти &gt; Підсумки &gt; CYBER-ACT-015 рахує суму з ПДВ" time="0.0045">
+            <failure message="expected 120 to be 121 // Object.is equality" type="AssertionError">
+AssertionError: expected 120 to be 121 // Object.is equality
+
+- Expected
++ Received
+
+- 121
++ 120
+
+ ❯ src/acts/acts.test.ts:27:24
+            </failure>
+        </testcase>
+        <testcase classname="src/acts/acts.test.ts" name="Акти &gt; експорт у PDF" time="0">
+            <skipped/>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/contracts/contract-card.test.ts" timestamp="2026-10-10T09:12:01.611Z" hostname="runner-01" tests="2" failures="0" errors="0" skipped="0" time="0.721">
+        <testcase classname="src/contracts/contract-card.test.ts" name="картка договору відкривається" time="0.7">
+            <system-out>
+render ok
+            </system-out>
+        </testcase>
+        <testcase classname="src/contracts/contract-card.test.ts" name="порівнює суми договорів" time="0.021">
+        </testcase>
+    </testsuite>
+</testsuites>

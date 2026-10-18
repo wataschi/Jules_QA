@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "2.0",
+  "thresholds": { "high": 80, "low": 60, "break": null },
+  "projectRoot": "/home/runner/work/cyber/cyber",
+  "config": { "testRunner": "vitest", "reporters": ["json", "html"] },
+  "framework": { "name": "StrykerJS", "version": "8.6.0" },
+  "files": {
+    "src/acts/acts.ts": {
+      "language": "typescript",
+      "source": "…",
+      "mutants": [
+        { "id": "10", "mutatorName": "ConditionalExpression", "replacement": "true", "location": { "start": { "line": 2, "column": 7 }, "end": { "line": 2, "column": 18 } }, "status": "Killed", "statusReason": "expected undefined to throw", "killedBy": ["t1"], "coveredBy": ["t1", "t2"], "static": false, "testsCompleted": 2 },
+        { "id": "11", "mutatorName": "BlockStatement", "replacement": "{}", "location": { "start": { "line": 1, "column": 36 }, "end": { "line": 4, "column": 2 } }, "status": "Killed", "killedBy": ["t2"], "coveredBy": ["t2"] },
+        { "id": "12", "mutatorName": "EqualityOperator", "replacement": "amount < 0", "location": { "start": { "line": 2, "column": 7 }, "end": { "line": 2, "column": 18 } }, "status": "Survived", "coveredBy": ["t1"] },
+        { "id": "13", "mutatorName": "StringLiteral", "replacement": "\"\"", "location": { "start": { "line": 2, "column": 35 }, "end": { "line": 2, "column": 43 } }, "status": "CompileError" },
+        { "id": "14", "mutatorName": "ObjectLiteral", "replacement": "{}", "location": { "start": { "line": 3, "column": 10 }, "end": { "line": 3, "column": 20 } }, "status": "Ignored", "statusReason": "disabled by comment" }
+      ]
+    },
+    "/home/runner/work/cyber/cyber/src/types.ts": {
+      "language": "typescript",
+      "source": "export type A = 1;\n",
+      "mutants": [
+        { "id": "15", "mutatorName": "StringLiteral", "replacement": "\"\"", "location": { "start": { "line": 1, "column": 1 }, "end": { "line": 1, "column": 2 } }, "status": "Ignored" }
+      ]
+    }
+  },
+  "testFiles": {
+    "src/acts/acts.test.ts": {
+      "source": "…",
+      "tests": [
+        { "id": "t1", "name": "Акти CYBER-ACT-014 акт без суми не зберігається" },
+        { "id": "t2", "name": "Акти рахує суму" }
+      ]
+    }
+  }
+}

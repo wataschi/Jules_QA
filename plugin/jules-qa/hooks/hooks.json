@@ -1,0 +1,27 @@
+{
+  "description": "Jules QA: прогін зміненого тест-файлу, пов'язаних тестів перед завершенням ходу і задачі QA на старті сесії. CLI лежить у репо продукту (qa/bin/jules-qa.mjs, ставить `jules-qa init`).",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR:-.}/qa/bin/jules-qa.mjs\" hook post-edit", "timeout": 300 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR:-.}/qa/bin/jules-qa.mjs\" hook stop", "timeout": 600 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR:-.}/qa/bin/jules-qa.mjs\" hook session-start", "timeout": 15 }
+        ]
+      }
+    ]
+  }
+}

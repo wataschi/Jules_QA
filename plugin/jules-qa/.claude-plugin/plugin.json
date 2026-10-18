@@ -1,0 +1,7 @@
+{
+  "name": "jules-qa",
+  "version": "0.1.0",
+  "description": "Jules QA: конвенції тестів, задачі QA з хаба Jules через MCP і хуки, що проганяють тести під час роботи агента.",
+  "author": { "name": "Jules QA" },
+  "keywords": ["qa", "testing", "jules", "mcp"]
+}

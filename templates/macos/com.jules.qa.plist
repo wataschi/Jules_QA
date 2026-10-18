@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Jules QA як системна служба (LaunchDaemon): стартує разом із macOS, без входу користувача,
+  і перезапускається після збою.
+
+  Встановлення (див. SETUP.md):
+    sudo cp com.jules.qa.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.jules.qa.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.jules.qa.plist
+
+  Замініть плейсхолдери:
+    __JULES_DIR__  — каталог клону Jules, напр. /Users/jules/Jules_QA
+    __USER__       — обліковий запис, від імені якого працює служба (не root)
+    шлях до node   — `which node` після `brew install node@24` (Apple Silicon: /opt/homebrew/opt/node@24/bin/node)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jules.qa</string>
+
+  <key>UserName</key>
+  <string>__USER__</string>
+
+  <key>WorkingDirectory</key>
+  <string>__JULES_DIR__</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/opt/node@24/bin/node</string>
+    <string>__JULES_DIR__/node_modules/tsx/dist/cli.mjs</string>
+    <string>src/server/start.ts</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <!-- Лише локальна адреса: команда заходить через `tailscale serve`, напряму порт недоступний. -->
+    <key>HOST</key>
+    <string>127.0.0.1</string>
+    <key>PORT</key>
+    <string>3840</string>
+    <key>UI_PORT</key>
+    <string>3840</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/opt/node@24/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- Внутрішній центр сертифікації Confluence/Jira, якщо є. Решта секретів — у __JULES_DIR__/.env -->
+    <key>NODE_EXTRA_CA_CERTS</key>
+    <string>__JULES_DIR__/certs/corp-ca.pem</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Перезапуск після будь-якого падіння, але не частіше ніж раз на 10 с. -->
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Library/Logs/jules-qa/jules.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Library/Logs/jules-qa/jules.err.log</string>
+
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>8192</integer>
+  </dict>
+</dict>
+</plist>

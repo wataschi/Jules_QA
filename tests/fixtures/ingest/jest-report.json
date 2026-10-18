@@ -1,0 +1,104 @@
+{
+  "numFailedTestSuites": 1,
+  "numFailedTests": 1,
+  "numPassedTestSuites": 1,
+  "numPassedTests": 2,
+  "numPendingTestSuites": 0,
+  "numPendingTests": 1,
+  "numRuntimeErrorTestSuites": 0,
+  "numTodoTests": 1,
+  "numTotalTestSuites": 2,
+  "numTotalTests": 5,
+  "openHandles": [],
+  "snapshot": { "added": 0, "didUpdate": false, "failure": false, "filesAdded": 0, "filesRemoved": 0, "filesRemovedList": [], "filesUnmatched": 0, "filesUpdated": 0, "matched": 0, "total": 0, "unchecked": 0, "uncheckedKeysByFile": [], "unmatched": 0, "updated": 0 },
+  "startTime": 1760087600000,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["ContractCard", "суми"],
+          "duration": 12,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ContractCard суми CYBER-CON-003 показує залишок",
+          "invocations": 2,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": ["Error: flaky network"],
+          "status": "passed",
+          "title": "CYBER-CON-003 показує залишок"
+        },
+        {
+          "ancestorTitles": ["ContractCard"],
+          "duration": 31,
+          "failureDetails": [{ "matcherResult": { "pass": false } }],
+          "failureMessages": ["\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: 10\nReceived: 9\n    at Object.<anonymous> (/home/runner/work/cyber/cyber/web/src/ContractCard.test.tsx:40:22)"],
+          "fullName": "ContractCard рахує кількість актів",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 0,
+          "retryReasons": [],
+          "status": "failed",
+          "title": "рахує кількість актів"
+        },
+        {
+          "ancestorTitles": ["ContractCard"],
+          "duration": null,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ContractCard друк",
+          "invocations": 0,
+          "location": null,
+          "numPassingAsserts": 0,
+          "retryReasons": [],
+          "status": "pending",
+          "title": "друк"
+        },
+        {
+          "ancestorTitles": ["ContractCard"],
+          "duration": null,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ContractCard архівування",
+          "invocations": 0,
+          "location": null,
+          "numPassingAsserts": 0,
+          "retryReasons": [],
+          "status": "todo",
+          "title": "архівування"
+        }
+      ],
+      "endTime": 1760087601200,
+      "message": "",
+      "name": "/home/runner/work/cyber/cyber/web/src/ContractCard.test.tsx",
+      "startTime": 1760087600100,
+      "status": "failed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "formatMoney",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "formatMoney"
+        }
+      ],
+      "endTime": 1760087601300,
+      "message": "",
+      "name": "/home/runner/work/cyber/cyber/web/src/money.test.ts",
+      "startTime": 1760087601210,
+      "status": "passed",
+      "summary": ""
+    }
+  ],
+  "wasInterrupted": false
+}

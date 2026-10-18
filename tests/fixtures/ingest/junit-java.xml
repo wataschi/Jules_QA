@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.acts.ActServiceTest" tests="3" skipped="0" failures="1" errors="0" time="0.31">
+  <testcase name="savesAct" classname="com.example.acts.ActServiceTest" time="0.2"/>
+  <testcase name="rejectsEmptyAmount" classname="com.example.acts.ActServiceTest" time="0.11">
+    <flakyFailure message="expected elapsed > 100ms" type="java.util.concurrent.TimeoutException">stack</flakyFailure>
+  </testcase>
+  <testcase name="comparesTotals" classname="com.example.acts.ActServiceTest" time="0.004">
+    <failure message="expected: 2 > 1 but was: false" type="org.opentest4j.AssertionFailedError"><![CDATA[org.opentest4j.AssertionFailedError: expected: 2 > 1 but was: false
+	at com.example.acts.ActServiceTest.comparesTotals(ActServiceTest.java:42)]]></failure>
+  </testcase>
+</testsuite>

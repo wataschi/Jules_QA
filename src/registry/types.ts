@@ -34,14 +34,15 @@ export type CaseStatus = z.infer<typeof caseStatusSchema>;
 export const automationStatusSchema = z.enum(['manual', 'candidate', 'automated', 'quarantined']);
 export type AutomationStatus = z.infer<typeof automationStatusSchema>;
 
-export const sourceKindSchema = z.enum(['confluence', 'file', 'paste']);
+export const sourceKindSchema = z.enum(['confluence', 'figma', 'file', 'paste']);
 export type SourceKind = z.infer<typeof sourceKindSchema>;
 
 /** `quote` — кейс прямо покриває текст вимоги; `derived` — домисел AI (негативні, безпекові тощо). */
 export const coverageKindSchema = z.enum(['quote', 'derived']);
 export type CoverageKind = z.infer<typeof coverageKindSchema>;
 
-export const runKindSchema = z.enum(['manual', 'auto', 'mixed']);
+/** `ci` — результати тестів із CI репо продукту за комітом. */
+export const runKindSchema = z.enum(['manual', 'auto', 'mixed', 'ci']);
 export type RunKind = z.infer<typeof runKindSchema>;
 
 export const runStateSchema = z.enum(['open', 'completed', 'cancelled']);
@@ -65,7 +66,7 @@ export type ProposalState = z.infer<typeof proposalStateSchema>;
 export const defectSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
 export const defectStatusSchema = z.enum(['open', 'triaged', 'fixed', 'wontfix', 'duplicate']);
 
-export const skillNameSchema = z.enum(['write-cases', 'validate-coverage', 'format-export']);
+export const skillNameSchema = z.enum(['write-cases', 'validate-coverage', 'format-export', 'agent']);
 export type SkillName = z.infer<typeof skillNameSchema>;
 
 /* ─────────────────────────────── проєкт ───────────────────────────────── */
@@ -82,13 +83,16 @@ export const projectSchema = z.object({
   confluenceSpace: z.string().optional(),
   testrailProjectId: z.number().int().positive().optional(),
   testrailSuiteId: z.number().int().positive().optional(),
+  /** Репозиторій продукту на GitHub: `owner/name`. */
+  repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(),
+  settings: z.lazy(() => projectSettingsSchema).default({}),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Project = z.infer<typeof projectSchema>;
 export const projectInputSchema = projectSchema
   .omit({ createdAt: true, updatedAt: true })
-  .partial({ id: true, description: true });
+  .partial({ id: true, description: true, settings: true });
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 
 /* ─────────────────────────── секція (модуль) ──────────────────────────── */
@@ -102,13 +106,17 @@ export const sectionSchema = z.object({
   code: z.string().regex(/^[A-Z][A-Z0-9]{1,7}$/),
   position: z.number().int().nonnegative().default(0),
   testrailSectionId: z.number().int().positive().optional(),
+  /** Glob-и шляхів коду модуля: за ними тест і задача потрапляють у модуль. */
+  paths: z.array(z.string().min(1)).default([]),
+  /** Власники модуля, що перекривають CODEOWNERS (логіни GitHub чи Tailscale). */
+  owners: z.array(z.string().min(1)).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Section = z.infer<typeof sectionSchema>;
 export const sectionInputSchema = sectionSchema
   .omit({ id: true, createdAt: true, updatedAt: true })
-  .partial({ code: true, position: true, parentId: true });
+  .partial({ code: true, position: true, parentId: true, paths: true, owners: true });
 export type SectionInput = z.infer<typeof sectionInputSchema>;
 
 /** Вузол дерева з лічильниками — те, що віддає `GET /api/registry/sections`. */
@@ -235,10 +243,31 @@ export const sourceSchema = z.object({
   externalVersion: z.string().optional(),
   /** Хеш усього тексту — швидка перевірка «чи змінилось». */
   contentHash: z.string(),
+  /** Дерево сторінок: батьківське джерело і глибина від кореня імпорту. */
+  parentId: z.string().optional(),
+  rootId: z.string().optional(),
+  depth: z.number().int().nonnegative().default(0),
+  /** Галочка «брати / не брати» в дереві. Невибрані сторінки не мають блоків. */
+  included: z.boolean().default(true),
+  /** «Не віддавати агентам»: вміст лишається в Jules, але не йде через MCP. */
+  noAgents: z.boolean().default(false),
+  spaceKey: z.string().optional(),
+  /** Модуль, до якого належить сторінка чи файл макета. */
+  sectionId: z.string().optional(),
+  lastError: z.string().optional(),
+  checkedAt: z.string().optional(),
   importedAt: z.string(),
   updatedAt: z.string(),
 });
 export type Source = z.infer<typeof sourceSchema>;
+
+export const blockMetaSchema = z.object({
+  figmaLinks: z.array(z.object({ url: z.string(), fileKey: z.string(), nodeId: z.string().optional() })).optional(),
+  jiraKeys: z.array(z.string()).optional(),
+  components: z.array(z.object({ name: z.string(), properties: z.record(z.string(), z.string()) })).optional(),
+  pageName: z.string().optional(),
+});
+export type BlockMeta = z.infer<typeof blockMetaSchema>;
 
 export const blockSchema = z.object({
   id: z.string().min(1),
@@ -253,6 +282,11 @@ export const blockSchema = z.object({
   hash: z.string(),
   /** Стан блоку після переімпорту: `same` | `changed` | `new` | `removed`. */
   changeState: z.enum(['same', 'changed', 'new', 'removed']).default('new'),
+  /** Для кадру Figma: ID вузла (`12:345`) і маршрут застосунку, якщо зіставлено. */
+  nodeId: z.string().optional(),
+  route: z.string().optional(),
+  /** Посилання на Figma і ключі Jira, знайдені в блоці; компоненти кадру. */
+  meta: blockMetaSchema.default({}),
 });
 export type Block = z.infer<typeof blockSchema>;
 
@@ -299,6 +333,10 @@ export const proposalSchema = z.object({
       sourceId: z.string().optional(),
       runId: z.string().optional(),
       caseId: z.string().optional(),
+      /** Задача агента, з якої прийшла пропозиція (план модуля, резервування ID). */
+      taskId: z.string().optional(),
+      /** Кейс зарезервовано агентом як чернетку: відхилення = прибрати тест. */
+      reserved: z.boolean().optional(),
     })
     .default({}),
   /** `derived` позначає домисел AI, якого немає у вимозі. */
@@ -381,6 +419,13 @@ export const registryRunSchema = z.object({
   finishedAt: z.string().optional(),
   summary: runSummarySchema,
   note: z.string().default(''),
+  /** Для прогонів CI: коміт, гілка, PR і звідки прийшли результати. */
+  sha: z.string().optional(),
+  branch: z.string().optional(),
+  prNumber: z.number().int().positive().optional(),
+  source: z.enum(['ci', 'local', 'engine', 'manual']).optional(),
+  event: z.enum(['pr', 'main', 'local']).optional(),
+  runUrl: z.string().optional(),
 });
 export type RegistryRun = z.infer<typeof registryRunSchema>;
 
@@ -573,4 +618,233 @@ export interface BulkResult {
   applied: boolean;
   /** Ідентифікатор пакета для відкату (`POST /api/registry/cases/bulk/undo`). */
   batchId?: string;
+}
+
+/* ═════════════════════ Jules 2.0: QA направляє, агент робить ═══════════════ */
+
+/** Налаштування проєкту, що не варті окремої колонки. */
+export const projectSettingsSchema = z.object({
+  /** Посилання, з яких імпортовано входи (для повторного оновлення). */
+  confluenceRoots: z.array(z.string()).default([]),
+  figmaFiles: z.array(z.string()).default([]),
+  jira: z
+    .object({
+      projectKey: z.string().min(1),
+      issueType: z.string().default('Task'),
+      assignee: z.string().optional(),
+      createBugs: z.boolean().default(false),
+    })
+    .optional(),
+  telegram: z.object({ chatId: z.string().optional(), enabled: z.boolean().default(false) }).default({}),
+  thresholds: z
+    .object({
+      staleTaskHours: z.number().positive().default(24),
+      leaseMinutes: z.number().positive().default(30),
+      mutationP1: z.number().min(0).max(100).default(60),
+      flakeScore: z.number().min(0).max(1).default(0.3),
+    })
+    .default({}),
+  /** Останній CODEOWNERS із CI: за ним маршрутизуються задачі. */
+  codeowners: z.string().optional(),
+  /** Glob-и рівнів тестів, якщо в репо своя структура. */
+  levels: z.record(z.string(), z.array(z.string())).optional(),
+  dashboardUrl: z.string().optional(),
+});
+export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
+
+/* ─────────────────────────── вкладення й посилання ─────────────────────── */
+
+export const assetKindSchema = z.enum(['image', 'diagram', 'frame']);
+export type AssetKind = z.infer<typeof assetKindSchema>;
+
+/**
+ * `none` — текст витягнуто без моделі, прочитання не треба; `needed` — зміст
+ * лише в картинці, створено задачу `read_asset`; `proposed` — агент описав,
+ * чекає QA; `approved` / `rejected` — рішення QA.
+ */
+export const readingStateSchema = z.enum(['none', 'needed', 'proposed', 'approved', 'rejected']);
+export type ReadingState = z.infer<typeof readingStateSchema>;
+
+export const assetSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  sourceId: z.string().optional(),
+  blockId: z.string().optional(),
+  kind: assetKindSchema,
+  name: z.string(),
+  diagramType: z.string().optional(),
+  mediaType: z.string().optional(),
+  sha256: z.string().optional(),
+  size: z.number().int().nonnegative().optional(),
+  originUrl: z.string().optional(),
+  /** Текст, витягнутий без моделі: draw.io, Gliffy, PlantUML, тексти кадру Figma. */
+  extractedText: z.string().default(''),
+  reading: z.string().optional(),
+  readingBy: z.string().optional(),
+  readingState: readingStateSchema.default('none'),
+  readingDecidedBy: z.string().optional(),
+  error: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Asset = z.infer<typeof assetSchema>;
+
+export const blockLinkSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  fromBlockId: z.string(),
+  toBlockId: z.string().optional(),
+  url: z.string(),
+  fileKey: z.string().optional(),
+  nodeId: z.string().optional(),
+  createdAt: z.string(),
+});
+export type BlockLink = z.infer<typeof blockLinkSchema>;
+
+/* ─────────────────────────── тести в коді й результати ─────────────────── */
+
+export const testLevelSchema = z.enum(['unit', 'integration', 'e2e', 'visual']);
+export type TestLevelName = z.infer<typeof testLevelSchema>;
+export const testStateSchema = z.enum(['active', 'skipped', 'quarantined', 'removed']);
+
+export const codeTestSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  testKey: z.string(),
+  file: z.string(),
+  name: z.string(),
+  fullName: z.string(),
+  level: testLevelSchema,
+  framework: z.string(),
+  author: z.enum(['agent', 'human']).default('human'),
+  state: testStateSchema.default('active'),
+  onMain: z.boolean().default(false),
+  caseIds: z.array(z.string()).default([]),
+  firstSeenSha: z.string().optional(),
+  lastSeenSha: z.string().optional(),
+  firstSeenAt: z.string(),
+  lastSeenAt: z.string(),
+  lastResult: z
+    .object({ status: z.enum(['passed', 'failed', 'skipped']), at: z.string(), sha: z.string().optional(), runId: z.string() })
+    .optional(),
+});
+export type CodeTest = z.infer<typeof codeTestSchema>;
+
+/* ──────────────────────────────── задачі ───────────────────────────────── */
+
+export const taskKindSchema = z.enum([
+  'add_test',
+  'change_test',
+  'remove_test',
+  'plan_module',
+  'read_asset',
+  'triage',
+  'stabilize',
+  /** Питання до людей: суперечність вимоги, макета й коду. Агенти його не беруть. */
+  'question',
+]);
+export type TaskKind = z.infer<typeof taskKindSchema>;
+
+export const taskStateSchema = z.enum([
+  'new',
+  'queued',
+  'claimed',
+  'needs_info',
+  'review',
+  'failed',
+  'done',
+  'rejected',
+]);
+export type TaskState = z.infer<typeof taskStateSchema>;
+
+export const taskAnchorSchema = z.object({
+  caseId: z.string().optional(),
+  blockId: z.string().optional(),
+  sectionId: z.string().optional(),
+  sourceId: z.string().optional(),
+  assetId: z.string().optional(),
+  testId: z.string().optional(),
+  file: z.string().optional(),
+  runId: z.string().optional(),
+});
+export type TaskAnchor = z.infer<typeof taskAnchorSchema>;
+
+export const taskReportSchema = z.object({
+  summary: z.string().default(''),
+  /** «Що перевіряє» простими словами — QA погоджує намір за цим списком. */
+  checks: z.array(z.string()).default([]),
+  tests: z.array(z.object({ file: z.string(), name: z.string(), caseIds: z.array(z.string()).default([]) })).default([]),
+  prUrl: z.string().optional(),
+  branch: z.string().optional(),
+});
+export type TaskReport = z.infer<typeof taskReportSchema>;
+
+export const taskSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  kind: taskKindSchema,
+  state: taskStateSchema,
+  title: z.string(),
+  text: z.string().default(''),
+  author: z.string(),
+  authorKind: z.enum(['qa', 'system', 'agent', 'dev']),
+  anchor: taskAnchorSchema.default({}),
+  sectionId: z.string().optional(),
+  owners: z.array(z.string()).default([]),
+  priority: casePrioritySchema.default('P2'),
+  parentId: z.string().optional(),
+  dedupKey: z.string().optional(),
+  leaseHolder: z.string().optional(),
+  leaseUntil: z.string().optional(),
+  attempts: z.number().int().nonnegative().default(0),
+  branch: z.string().optional(),
+  prUrl: z.string().optional(),
+  prNumber: z.number().int().positive().optional(),
+  report: taskReportSchema.optional(),
+  qaConfirmedBy: z.string().optional(),
+  qaConfirmedAt: z.string().optional(),
+  mergedAt: z.string().optional(),
+  queuedAt: z.string(),
+  doneAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Task = z.infer<typeof taskSchema>;
+
+export const taskInputSchema = z.object({
+  projectId: z.string().min(1),
+  kind: taskKindSchema,
+  title: z.string().min(1).max(300),
+  text: z.string().max(20_000).default(''),
+  anchor: taskAnchorSchema.default({}),
+  priority: casePrioritySchema.optional(),
+});
+export type TaskInput = z.infer<typeof taskInputSchema>;
+
+export const taskEventSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  at: z.string(),
+  author: z.string(),
+  authorKind: z.enum(['qa', 'system', 'agent', 'dev']),
+  type: z.enum(['question', 'answer', 'interpretation', 'status', 'comment']),
+  text: z.string(),
+  data: z.record(z.string(), z.unknown()).default({}),
+});
+export type TaskEvent = z.infer<typeof taskEventSchema>;
+
+/* ────────────────────────── люди, токени, стан ─────────────────────────── */
+
+export const userRoleSchema = z.enum(['admin', 'qa', 'dev']);
+export type UserRole = z.infer<typeof userRoleSchema>;
+export const tokenRoleSchema = z.enum(['ci', 'dev', 'qa', 'admin']);
+export type TokenRole = z.infer<typeof tokenRoleSchema>;
+
+export interface HealthCheck {
+  target: string;
+  ok: boolean;
+  checkedAt: string;
+  since: string;
+  error?: string;
+  details: Record<string, unknown>;
 }

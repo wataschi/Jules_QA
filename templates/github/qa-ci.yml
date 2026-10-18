@@ -1,0 +1,191 @@
+# Jules QA: тести продукту → jules-qa sync → PR-коментар; на main — QA_STATUS.md від бота.
+#
+# Потрібно в налаштуваннях репо (або організації):
+#   vars.JULES_URL              — адреса Jules у tailnet, напр. https://macstudio.tailXXXX.ts.net
+#   secrets.JULES_TOKEN         — машинний токен CI цього проєкту (Jules → «Налаштування»)
+#   secrets.TS_OAUTH_CLIENT_ID  — OAuth-клієнт Tailscale з правом на tag:ci
+#   secrets.TS_OAUTH_SECRET
+#
+# Циклів немає: бот комітить QA_STATUS.md з `[skip ci]`, а коміти з GITHUB_TOKEN
+# не запускають workflow взагалі. Job нижче додатково пропускає такі коміти.
+name: qa-ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: qa-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  JULES_URL: ${{ vars.JULES_URL }}
+  JULES_TOKEN: ${{ secrets.JULES_TOKEN }}
+
+jobs:
+  tests:
+    if: >-
+      (github.event_name == 'pull_request' && github.event.action != 'closed') ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Tailscale (tag:ci)
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - run: npm ci
+
+      # Тести продукту. Замініть на свої команди (unit, integration, e2e). Звіти мають лягти
+      # туди, куди вказує `reports` у qa/jules.config.json, наприклад:
+      #   npx vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=test-results/junit.xml
+      - name: Тести
+        id: tests
+        run: npm test
+
+      - name: jules-qa CLI
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f qa/bin/jules-qa.mjs ]; then
+            cp qa/bin/jules-qa.mjs "$RUNNER_TEMP/jules-qa.mjs"
+          else
+            curl -fsS "$JULES_URL/cli/jules-qa.mjs" -o "$RUNNER_TEMP/jules-qa.mjs"
+          fi
+
+      - name: Результати в Jules
+        if: ${{ !cancelled() }}
+        run: >-
+          node "$RUNNER_TEMP/jules-qa.mjs" sync
+          --event ${{ github.event_name == 'pull_request' && 'pr' || 'main' }}
+          --source ci
+          --base "origin/${{ github.base_ref || 'main' }}"
+
+      # ── PR ────────────────────────────────────────────────────────────────
+      - name: Подія PR (відкрито)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened') }}
+        run: node "$RUNNER_TEMP/jules-qa.mjs" pr-event --state opened
+
+      - name: Охоронець асертів
+        id: guard
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: node "$RUNNER_TEMP/jules-qa.mjs" assert-guard --base "origin/${{ github.base_ref }}"
+
+      - name: Мітка qa:assertion-change
+        if: ${{ !cancelled() && steps.guard.outputs.label != '' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['qa:assertion-change'],
+            });
+
+      - name: Звіт для PR
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: >-
+          node "$RUNNER_TEMP/jules-qa.mjs" pr-comment
+          --pr ${{ github.event.pull_request.number }}
+          --out "$RUNNER_TEMP/qa-comment.md"
+
+      - name: PR-коментар
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const file = `${process.env.RUNNER_TEMP}/qa-comment.md`;
+            if (!fs.existsSync(file)) return;
+            const body = fs.readFileSync(file, 'utf8');
+            const marker = '<!-- jules-qa -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            // Один коментар на PR: оновлюємо свій, а не додаємо новий на кожен прогін.
+            const mine = comments.find((c) => c.user?.type === 'Bot' && c.body?.includes(marker));
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      # ── main ──────────────────────────────────────────────────────────────
+      - name: Перевірка «коміт прийшов через PR»
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node "$RUNNER_TEMP/jules-qa.mjs" push-check
+
+      - name: QA_STATUS.md
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        run: |
+          node "$RUNNER_TEMP/jules-qa.mjs" status --out QA_STATUS.md --branch main
+          if [ -z "$(git status --porcelain -- QA_STATUS.md)" ]; then
+            echo "QA_STATUS.md без змін"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add QA_STATUS.md
+          git commit -m 'chore(qa): оновити QA_STATUS.md [skip ci]'
+          # main міг піти вперед за час прогону — підтягуємо й пробуємо ще раз.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git pull --rebase origin main
+          done
+          echo "Не вдалося запушити QA_STATUS.md" >&2
+          exit 1
+
+  pr-closed:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: qa
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tailscale (tag:ci)
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: jules-qa CLI
+        run: |
+          if [ -f qa/bin/jules-qa.mjs ]; then
+            cp qa/bin/jules-qa.mjs "$RUNNER_TEMP/jules-qa.mjs"
+          else
+            curl -fsS "$JULES_URL/cli/jules-qa.mjs" -o "$RUNNER_TEMP/jules-qa.mjs"
+          fi
+
+      - name: Подія PR (злито чи закрито)
+        run: >-
+          node "$RUNNER_TEMP/jules-qa.mjs" pr-event
+          --state ${{ github.event.pull_request.merged && 'merged' || 'closed' }}

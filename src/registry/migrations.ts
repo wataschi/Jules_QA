@@ -271,11 +271,304 @@ CREATE TABLE testrail_mappings (
 CREATE INDEX idx_mappings_project ON testrail_mappings(project_id);
 `;
 
+/**
+ * Jules 2.0: входи (дерево Confluence, вкладення, кадри Figma), тести в коді й
+ * результати CI за комітом, задачі для агентів, токени й люди, зовнішні задачі,
+ * сповіщення. Див. docs/agent-driven-qa-plan.md, розділ 4.2.
+ */
+const V2_SQL = `
+ALTER TABLE projects ADD COLUMN repo TEXT;
+ALTER TABLE projects ADD COLUMN settings TEXT NOT NULL DEFAULT '{}';
+
+ALTER TABLE sections ADD COLUMN paths TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE sections ADD COLUMN owners TEXT NOT NULL DEFAULT '[]';
+
+ALTER TABLE sources ADD COLUMN parent_id TEXT;
+ALTER TABLE sources ADD COLUMN depth INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sources ADD COLUMN included INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE sources ADD COLUMN no_agents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sources ADD COLUMN space_key TEXT;
+ALTER TABLE sources ADD COLUMN root_id TEXT;
+ALTER TABLE sources ADD COLUMN section_id TEXT;
+ALTER TABLE sources ADD COLUMN last_error TEXT;
+ALTER TABLE sources ADD COLUMN checked_at TEXT;
+CREATE INDEX idx_sources_parent ON sources(project_id, parent_id);
+
+ALTER TABLE blocks ADD COLUMN node_id TEXT;
+ALTER TABLE blocks ADD COLUMN route TEXT;
+ALTER TABLE blocks ADD COLUMN meta TEXT NOT NULL DEFAULT '{}';
+
+-- Картинки, схеми й знімки кадрів. Файл лежить у data/assets/<sha256>, тож
+-- однакова картинка на кількох сторінках зберігається один раз, а погоджене
+-- прочитання переноситься за хешем.
+CREATE TABLE assets (
+  id                  TEXT PRIMARY KEY,
+  project_id          TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  source_id           TEXT,
+  block_id            TEXT,
+  kind                TEXT NOT NULL,
+  name                TEXT NOT NULL,
+  diagram_type        TEXT,
+  media_type          TEXT,
+  sha256              TEXT,
+  size                INTEGER,
+  origin_url          TEXT,
+  extracted_text      TEXT NOT NULL DEFAULT '',
+  reading             TEXT,
+  reading_by          TEXT,
+  reading_state       TEXT NOT NULL DEFAULT 'none',
+  reading_decided_by  TEXT,
+  error               TEXT,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+);
+CREATE INDEX idx_assets_block ON assets(block_id);
+CREATE INDEX idx_assets_source ON assets(source_id);
+CREATE INDEX idx_assets_hash ON assets(project_id, sha256);
+
+-- Сторінка вимоги ↔ кадр Figma (посилання, знайдені в тексті сторінки).
+CREATE TABLE block_links (
+  id            TEXT PRIMARY KEY,
+  project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  from_block_id TEXT NOT NULL,
+  to_block_id   TEXT,
+  url           TEXT NOT NULL,
+  file_key      TEXT,
+  node_id       TEXT,
+  created_at    TEXT NOT NULL,
+  UNIQUE (from_block_id, url)
+);
+CREATE INDEX idx_block_links_to ON block_links(to_block_id);
+
+CREATE TABLE tests (
+  id             TEXT PRIMARY KEY,
+  project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  test_key       TEXT NOT NULL,
+  file           TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  full_name      TEXT NOT NULL,
+  level          TEXT NOT NULL DEFAULT 'unit',
+  framework      TEXT NOT NULL DEFAULT 'unknown',
+  author         TEXT NOT NULL DEFAULT 'human',
+  state          TEXT NOT NULL DEFAULT 'active',
+  on_main        INTEGER NOT NULL DEFAULT 0,
+  first_seen_sha TEXT,
+  last_seen_sha  TEXT,
+  first_seen_at  TEXT NOT NULL,
+  last_seen_at   TEXT NOT NULL,
+  UNIQUE (project_id, test_key)
+);
+CREATE INDEX idx_tests_file ON tests(project_id, file);
+
+CREATE TABLE test_links (
+  test_id TEXT NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+  case_id TEXT NOT NULL,
+  PRIMARY KEY (test_id, case_id)
+);
+CREATE INDEX idx_test_links_case ON test_links(case_id);
+
+ALTER TABLE registry_runs ADD COLUMN sha TEXT;
+ALTER TABLE registry_runs ADD COLUMN branch TEXT;
+ALTER TABLE registry_runs ADD COLUMN pr_number INTEGER;
+ALTER TABLE registry_runs ADD COLUMN source TEXT;
+ALTER TABLE registry_runs ADD COLUMN event TEXT;
+ALTER TABLE registry_runs ADD COLUMN run_url TEXT;
+CREATE INDEX idx_runs_sha ON registry_runs(project_id, event, branch, started_at DESC);
+
+CREATE TABLE test_results (
+  id          TEXT PRIMARY KEY,
+  run_id      TEXT NOT NULL REFERENCES registry_runs(id) ON DELETE CASCADE,
+  test_id     TEXT NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL,
+  duration_ms INTEGER,
+  error       TEXT,
+  retries     INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  UNIQUE (run_id, test_id)
+);
+CREATE INDEX idx_test_results_test ON test_results(test_id, created_at DESC);
+
+CREATE TABLE code_coverage (
+  id               TEXT PRIMARY KEY,
+  project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  run_id           TEXT,
+  sha              TEXT NOT NULL,
+  branch           TEXT,
+  path             TEXT NOT NULL,
+  lines_found      INTEGER,
+  lines_hit        INTEGER,
+  branches_found   INTEGER,
+  branches_hit     INTEGER,
+  mutants_total    INTEGER,
+  mutants_killed   INTEGER,
+  mutants_survived INTEGER,
+  mutation_score   REAL,
+  created_at       TEXT NOT NULL,
+  UNIQUE (project_id, sha, path)
+);
+
+CREATE TABLE pull_requests (
+  project_id        TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  number            INTEGER NOT NULL,
+  state             TEXT NOT NULL DEFAULT 'opened',
+  title             TEXT,
+  url               TEXT,
+  head_branch       TEXT,
+  sha               TEXT,
+  assertion_changes TEXT NOT NULL DEFAULT '[]',
+  updated_at        TEXT NOT NULL,
+  merged_at         TEXT,
+  PRIMARY KEY (project_id, number)
+);
+
+CREATE TABLE push_checks (
+  id              TEXT PRIMARY KEY,
+  project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  sha             TEXT NOT NULL,
+  branch          TEXT NOT NULL,
+  via_pr          INTEGER NOT NULL,
+  pr_numbers      TEXT NOT NULL DEFAULT '[]',
+  author          TEXT,
+  acknowledged_by TEXT,
+  created_at      TEXT NOT NULL,
+  UNIQUE (project_id, sha)
+);
+
+CREATE TABLE task_counters (
+  project_id TEXT PRIMARY KEY,
+  next       INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE tasks (
+  id              TEXT PRIMARY KEY,
+  project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind            TEXT NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'queued',
+  title           TEXT NOT NULL,
+  text            TEXT NOT NULL DEFAULT '',
+  author          TEXT NOT NULL,
+  author_kind     TEXT NOT NULL DEFAULT 'qa',
+  anchor          TEXT NOT NULL DEFAULT '{}',
+  section_id      TEXT,
+  owners          TEXT NOT NULL DEFAULT '[]',
+  priority        TEXT NOT NULL DEFAULT 'P2',
+  parent_id       TEXT,
+  dedup_key       TEXT,
+  lease_holder    TEXT,
+  lease_until     TEXT,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  branch          TEXT,
+  pr_url          TEXT,
+  pr_number       INTEGER,
+  report          TEXT,
+  qa_confirmed_by TEXT,
+  qa_confirmed_at TEXT,
+  merged_at       TEXT,
+  queued_at       TEXT NOT NULL,
+  done_at         TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX idx_tasks_project ON tasks(project_id, state, kind);
+CREATE INDEX idx_tasks_pr ON tasks(project_id, pr_number);
+CREATE UNIQUE INDEX idx_tasks_dedup ON tasks(project_id, dedup_key)
+  WHERE dedup_key IS NOT NULL AND state NOT IN ('done', 'rejected');
+
+CREATE TABLE task_events (
+  id          TEXT PRIMARY KEY,
+  task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  at          TEXT NOT NULL,
+  author      TEXT NOT NULL,
+  author_kind TEXT NOT NULL,
+  type        TEXT NOT NULL,
+  text        TEXT NOT NULL DEFAULT '',
+  data        TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX idx_task_events_task ON task_events(task_id, at);
+
+CREATE TABLE agent_jobs (
+  id          TEXT PRIMARY KEY,
+  project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  task_id     TEXT NOT NULL,
+  holder      TEXT NOT NULL,
+  agent       TEXT,
+  model       TEXT,
+  given       TEXT NOT NULL DEFAULT '[]',
+  branch      TEXT,
+  pr_url      TEXT,
+  outcome     TEXT,
+  started_at  TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE INDEX idx_agent_jobs_task ON agent_jobs(task_id, started_at DESC);
+
+CREATE TABLE external_issues (
+  id         TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  system     TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  key        TEXT NOT NULL,
+  url        TEXT,
+  ref        TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (project_id, system, kind, ref)
+);
+
+CREATE TABLE users (
+  login        TEXT PRIMARY KEY,
+  name         TEXT,
+  role         TEXT NOT NULL DEFAULT 'dev',
+  created_at   TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+
+-- Машинні й персональні токени. Зберігається лише sha256 токена.
+CREATE TABLE api_tokens (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  token_hash   TEXT NOT NULL UNIQUE,
+  role         TEXT NOT NULL,
+  project_id   TEXT,
+  owner        TEXT,
+  created_by   TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  last_used_at TEXT,
+  revoked_at   TEXT
+);
+
+CREATE TABLE health_checks (
+  target     TEXT PRIMARY KEY,
+  ok         INTEGER NOT NULL,
+  checked_at TEXT NOT NULL,
+  since      TEXT NOT NULL,
+  error      TEXT,
+  details    TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE notifications (
+  id         TEXT PRIMARY KEY,
+  project_id TEXT,
+  kind       TEXT NOT NULL,
+  dedup_key  TEXT NOT NULL UNIQUE,
+  payload    TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  sent_at    TEXT,
+  error      TEXT
+);
+`;
+
 export const migrations: Migration[] = [
   {
     id: '001_init',
     up: (db) => {
       db.exec(INIT_SQL);
+    },
+  },
+  {
+    id: '002_agent_driven_qa',
+    up: (db) => {
+      db.exec(V2_SQL);
     },
   },
 ];

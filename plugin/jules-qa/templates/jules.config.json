@@ -1,0 +1,19 @@
+{
+  "hub": "{{hub}}",
+  "projectId": "{{projectId}}",
+  "reports": {
+    "tests": ["test-results/junit.xml"],
+    "coverage": ["coverage/lcov.info"],
+    "mutation": ["reports/mutation/mutation.json"]
+  },
+  "levels": {
+    "e2e": ["e2e/**"],
+    "integration": ["**/integration/**", "**/*.int.*"],
+    "visual": ["**/visual/**"]
+  },
+  "testFileGlobs": ["**/*.test.*", "**/*.spec.*", "tests/**", "e2e/**"],
+  "commands": {
+    "testFile": "npx vitest run {files}",
+    "related": "npx vitest related --run {files}"
+  }
+}

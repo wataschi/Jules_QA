@@ -11,6 +11,7 @@ x-qa-volumes: &qa-volumes
 
 x-qa-environment: &qa-environment
   NODE_ENV: production
+  HOST: 0.0.0.0
   PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
 
 services:

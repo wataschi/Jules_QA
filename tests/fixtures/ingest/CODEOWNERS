@@ -1,0 +1,13 @@
+# Власники коду Кібер
+# Останнє збігле правило перемагає.
+
+*                       @cyber/core
+*.py                    @cyber/backend
+/docs/                  @cyber/docs
+apps/                   @cyber/apps
+docs/*                  docs@example.com
+/src/acts/              @cyber/acts @alice
+src/acts/legacy/**      @bob
+/build/logs/            @cyber/infra   # логи збірки
+\#weird-file            @cyber/core
+/vendor/

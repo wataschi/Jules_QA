@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "thresholds": { "high": 80, "low": 60 },
+  "files": {
+    "src/acts/acts.ts": {
+      "language": "typescript",
+      "source": "export function createAct(amount) {\n  if (amount <= 0) throw new Error('amount');\n  return { amount };\n}\n",
+      "mutants": [
+        { "id": "0", "mutatorName": "ConditionalExpression", "replacement": "false", "location": { "start": { "line": 2, "column": 7 }, "end": { "line": 2, "column": 18 } }, "status": "Killed" },
+        { "id": "1", "mutatorName": "EqualityOperator", "replacement": "amount < 0", "location": { "start": { "line": 2, "column": 7 }, "end": { "line": 2, "column": 18 } }, "status": "Survived" },
+        { "id": "2", "mutatorName": "StringLiteral", "replacement": "\"\"", "location": { "start": { "line": 2, "column": 35 }, "end": { "line": 2, "column": 43 } }, "status": "Killed" },
+        { "id": "3", "mutatorName": "ObjectLiteral", "replacement": "{}", "location": { "start": { "line": 3, "column": 10 }, "end": { "line": 3, "column": 20 } }, "status": "Timeout" }
+      ]
+    },
+    "src/utils/money.ts": {
+      "language": "typescript",
+      "source": "export const fmt = (v) => v.toFixed(2);\n",
+      "mutants": [
+        { "id": "4", "mutatorName": "ArrowFunction", "replacement": "() => undefined", "location": { "start": { "line": 1, "column": 20 }, "end": { "line": 1, "column": 39 } }, "status": "NoCoverage" }
+      ]
+    }
+  }
+}

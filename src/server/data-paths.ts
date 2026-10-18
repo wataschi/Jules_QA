@@ -70,3 +70,11 @@ export function getStorageStatesDir(): string {
 export function getHitlControlDir(): string {
   return path.join(getMidsceneRunRoot(), 'control');
 }
+
+/**
+ * Картинки, схеми й знімки кадрів за sha256. Поруч із базою реєстру, тож
+ * тимчасова база тестів отримує й тимчасове сховище вкладень.
+ */
+export function getAssetsDir(): string {
+  return process.env.JULES_ASSETS_DIR ?? path.join(path.dirname(getRegistryDbPath()), 'assets');
+}

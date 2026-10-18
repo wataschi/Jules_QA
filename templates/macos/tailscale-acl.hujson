@@ -1,0 +1,39 @@
+// ACL Tailscale для Jules QA на Mac Studio.
+// Вставте в https://login.tailscale.com/admin/acls (або злийте з наявною політикою).
+// Замініть адреси користувачів і ім'я машини (тут тег tag:jules на Mac Studio).
+{
+  "groups": {
+    // QA: дашборд, погодження, запити.
+    "group:qa": ["qa.lead@example.com", "qa1@example.com"],
+    // Розробники: дашборд, MCP-сервер (/mcp) для агентів, CLI.
+    "group:dev": ["dev1@example.com", "dev2@example.com"],
+  },
+
+  "tagOwners": {
+    // Mac Studio з Jules.
+    "tag:jules": ["autogroup:admin"],
+    // Тимчасові вузли GitHub Actions (tailscale/github-action, OAuth-клієнт з цим тегом).
+    "tag:ci": ["autogroup:admin"],
+  },
+
+  "acls": [
+    // Люди — лише HTTPS (tailscale serve → 127.0.0.1:3840). Сам порт 3840 у tailnet не відкритий.
+    { "action": "accept", "src": ["group:qa", "group:dev"], "dst": ["tag:jules:443"] },
+
+    // CI — теж лише 443. Маршрути на рівні HTTP тут не обмежити: це робить Jules — машинний
+    // токен CI проєкту дає доступ лише до інжесту, статусу й PR-коментаря свого проєкту.
+    { "action": "accept", "src": ["tag:ci"], "dst": ["tag:jules:443"] },
+
+    // Адміністраторам — SSH на Mac Studio для обслуговування (за потреби).
+    { "action": "accept", "src": ["autogroup:admin"], "dst": ["tag:jules:22"] },
+  ],
+
+  // Решта машин tailnet доступу до Jules не має: усе, що не дозволено вище, заборонено.
+
+  "ssh": [],
+
+  "tests": [
+    { "src": "qa1@example.com", "accept": ["tag:jules:443"], "deny": ["tag:jules:3840"] },
+    { "src": "tag:ci", "accept": ["tag:jules:443"], "deny": ["tag:jules:22", "tag:jules:3840"] },
+  ],
+}

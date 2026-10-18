@@ -1,0 +1,32 @@
+<ac:structured-macro ac:name="toc" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0001"><ac:parameter ac:name="maxLevel">3</ac:parameter></ac:structured-macro>
+<h1>Платіжні доручення</h1>
+<p>Модуль дозволяє бухгалтеру створювати платіжні доручення з карти контрагента. Епік: <ac:structured-macro ac:name="jira" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0002"><ac:parameter ac:name="server">Jira Corp</ac:parameter><ac:parameter ac:name="columnIds">issuekey,summary,status</ac:parameter><ac:parameter ac:name="columns">key,summary,status</ac:parameter><ac:parameter ac:name="serverId">3a9e1f2b-0000-3c4d-8e9f-111122223333</ac:parameter><ac:parameter ac:name="key">PAY-101</ac:parameter></ac:structured-macro></p>
+<p>Макет екрана: <a href="https://www.figma.com/design/AbC123xYz/Payments?node-id=12-345&amp;t=9xQ-0">Payments — список</a>.</p>
+<h2>Створення доручення</h2>
+<p>Форма створення показана на знімку:</p>
+<p><ac:image ac:height="250" ac:alt="Форма створення доручення"><ri:attachment ri:filename="payment-form.png" ri:version-at-save="2" /></ac:image></p>
+<ac:structured-macro ac:name="info" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0003"><ac:rich-text-body><p>Сума доручення більше нуля. Див. також <ac:structured-macro ac:name="jira" ac:schema-version="1"><ac:parameter ac:name="key">PAY-102</ac:parameter></ac:structured-macro></p></ac:rich-text-body></ac:structured-macro>
+<h2>Процес погодження</h2>
+<ac:structured-macro ac:name="drawio" ac:schema-version="1" data-layout="default" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0004"><ac:parameter ac:name="mVer">2</ac:parameter><ac:parameter ac:name="zoom">1</ac:parameter><ac:parameter ac:name="simple">0</ac:parameter><ac:parameter ac:name="inComment">0</ac:parameter><ac:parameter ac:name="pageId">229376001</ac:parameter><ac:parameter ac:name="custContentId">229376010</ac:parameter><ac:parameter ac:name="lbox">1</ac:parameter><ac:parameter ac:name="diagramDisplayName">Погодження</ac:parameter><ac:parameter ac:name="contentVer">3</ac:parameter><ac:parameter ac:name="revision">3</ac:parameter><ac:parameter ac:name="baseUrl">https://wiki.corp.local</ac:parameter><ac:parameter ac:name="diagramName">approval-flow</ac:parameter><ac:parameter ac:name="width">800</ac:parameter><ac:parameter ac:name="height">400</ac:parameter><ac:parameter ac:name="tbstyle">top</ac:parameter></ac:structured-macro>
+<p>Спільна схема статусів з розділу архітектури:</p>
+<ac:structured-macro ac:name="inc-drawio" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0005"><ac:parameter ac:name="diagramName">statuses</ac:parameter><ac:parameter ac:name="pageId">229300500</ac:parameter><ac:parameter ac:name="includedDiagram">1</ac:parameter></ac:structured-macro>
+<h2>Модель даних</h2>
+<ac:structured-macro ac:name="gliffy" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0006"><ac:parameter ac:name="macroId">0d2a6c9e-0007</ac:parameter><ac:parameter ac:name="displayName">ER доручень</ac:parameter><ac:parameter ac:name="name">payments-er</ac:parameter><ac:parameter ac:name="pagePin">2</ac:parameter></ac:structured-macro>
+<h2>Послідовність викликів</h2>
+<ac:structured-macro ac:name="plantuml" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0008"><ac:parameter ac:name="atlassian-macro-output-type">INLINE</ac:parameter><ac:plain-text-body><![CDATA[@startuml
+Бухгалтер -> UI: Зберегти
+UI -> API: POST /payments
+API --> UI: 201
+@enduml]]></ac:plain-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="mermaid" ac:schema-version="1"><ac:plain-text-body><![CDATA[graph TD; Draft-->Approved; Approved-->Paid]]></ac:plain-text-body></ac:structured-macro>
+<h2>Макети</h2>
+<ac:structured-macro ac:name="widget" ac:schema-version="1" ac:macro-id="5b1c0f0e-1111-4c3a-9a51-0d2a6c9e0009"><ac:parameter ac:name="url"><ri:url ri:value="https://www.figma.com/file/FiLeKey42/Payments-Flow?type=design&amp;node-id=7-89&amp;mode=design" /></ac:parameter><ac:parameter ac:name="width">800</ac:parameter><ac:parameter ac:name="height">450</ac:parameter></ac:structured-macro>
+<ac:structured-macro ac:name="widget" ac:schema-version="1"><ac:parameter ac:name="url"><ri:url ri:value="https://www.youtube.com/watch?v=dQw4w9WgXcQ" /></ac:parameter></ac:structured-macro>
+<ac:structured-macro ac:name="lucidchart" ac:schema-version="1"><ac:parameter ac:name="documentTitle">Інтеграція з банком</ac:parameter><ac:parameter ac:name="documentId">f00d-beef</ac:parameter></ac:structured-macro>
+<h2>Зовнішній знімок</h2>
+<p><ac:image ac:alt="Банківська виписка"><ri:url ri:value="https://static.corp.local/img/bank%20statement.png" /></ac:image></p>
+<h3>Тільки картинка</h3>
+<p><ac:image><ri:attachment ri:filename="empty-state.png"><ri:page ri:content-title="Спільні макети" ri:space-key="UX" /></ri:attachment></ac:image></p>
+<h2>Пов'язані задачі</h2>
+<table class="wrapped"><colgroup><col /><col /></colgroup><tbody><tr><th>Задача</th><th>Опис</th></tr><tr><td><ac:structured-macro ac:name="jira" ac:schema-version="1"><ac:parameter ac:name="key">PAY-103</ac:parameter></ac:structured-macro></td><td>Експорт у XML</td></tr><tr><td><ac:structured-macro ac:name="jira" ac:schema-version="1"><ac:parameter ac:name="jqlQuery">project = PAY</ac:parameter></ac:structured-macro></td><td>Усі задачі</td></tr></tbody></table>
+<p>Стара версія макета: <ac:link><ri:url ri:value="https://figma.com/proto/PrOtO77/Old" /><ac:plain-text-link-body><![CDATA[прототип]]></ac:plain-text-link-body></ac:link></p>

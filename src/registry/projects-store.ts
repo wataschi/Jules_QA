@@ -1,7 +1,14 @@
 /** Сховище проєктів реєстру. */
-import { execute, nowIso, query, queryOne, type Row } from './db.js';
+import { execute, fromJson, nowIso, query, queryOne, toJson, type Row } from './db.js';
 import { slugify } from './ids.js';
-import { projectInputSchema, projectSchema, type Project, type ProjectInput } from './types.js';
+import {
+  projectInputSchema,
+  projectSchema,
+  projectSettingsSchema,
+  type Project,
+  type ProjectInput,
+  type ProjectSettings,
+} from './types.js';
 
 function rowToProject(row: Row): Project {
   return projectSchema.parse({
@@ -13,6 +20,8 @@ function rowToProject(row: Row): Project {
     confluenceSpace: row.confluence_space ?? undefined,
     testrailProjectId: row.testrail_project_id ?? undefined,
     testrailSuiteId: row.testrail_suite_id ?? undefined,
+    repo: row.repo ?? undefined,
+    settings: fromJson<ProjectSettings>(row.settings, projectSettingsSchema.parse({})),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -50,8 +59,9 @@ export function createProject(input: ProjectInput): Project {
 
   execute(
     `INSERT INTO projects
-       (id, key, name, description, base_url, confluence_space, testrail_project_id, testrail_suite_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, key, name, description, base_url, confluence_space, testrail_project_id, testrail_suite_id,
+        repo, settings, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       parsed.key.toUpperCase(),
@@ -61,6 +71,8 @@ export function createProject(input: ProjectInput): Project {
       parsed.confluenceSpace ?? null,
       parsed.testrailProjectId ?? null,
       parsed.testrailSuiteId ?? null,
+      parsed.repo ?? null,
+      toJson(projectSettingsSchema.parse(parsed.settings ?? {})),
       at,
       at,
     ],
@@ -76,6 +88,7 @@ const PATCHABLE: Record<string, string> = {
   testrailProjectId: 'testrail_project_id',
   testrailSuiteId: 'testrail_suite_id',
   key: 'key',
+  repo: 'repo',
 };
 
 export function updateProject(id: string, patch: Partial<ProjectInput>): Project {
@@ -88,6 +101,12 @@ export function updateProject(id: string, patch: Partial<ProjectInput>): Project
     const value = (patch as Record<string, unknown>)[field];
     sets.push(`${column} = ?`);
     params.push(field === 'key' && typeof value === 'string' ? value.toUpperCase() : (value ?? null));
+  }
+
+  if (patch.settings !== undefined) {
+    // Налаштування зливаються з наявними: форма в UI шле лише змінену частину.
+    sets.push('settings = ?');
+    params.push(toJson(projectSettingsSchema.parse({ ...existing.settings, ...patch.settings })));
   }
 
   if (sets.length === 0) return existing;

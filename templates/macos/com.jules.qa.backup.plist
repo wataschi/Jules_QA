@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Нічний бекап реєстру Jules (backup.sh) о 03:15.
+
+  Встановлення:
+    sudo cp com.jules.qa.backup.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.jules.qa.backup.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.jules.qa.backup.plist
+  Перевірити вручну:
+    sudo launchctl kickstart -k system/com.jules.qa.backup
+
+  Плейсхолдери: __JULES_DIR__, __USER__, __BACKUP_DIR__ (інший диск або хмарна тека,
+  напр. /Volumes/Backup/jules-qa).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jules.qa.backup</string>
+
+  <key>UserName</key>
+  <string>__USER__</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__JULES_DIR__/templates/macos/backup.sh</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>JULES_DIR</key>
+    <string>__JULES_DIR__</string>
+    <key>BACKUP_DIR</key>
+    <string>__BACKUP_DIR__</string>
+    <key>KEEP_DAYS</key>
+    <string>14</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Щоночі о 03:15. Якщо Mac спав чи був вимкнений, launchd запустить завдання після пробудження. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>15</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Library/Logs/jules-qa/backup.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Library/Logs/jules-qa/backup.err.log</string>
+</dict>
+</plist>

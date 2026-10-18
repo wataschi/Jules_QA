@@ -1,0 +1,72 @@
+{
+  "contentType": "application/gliffy+json",
+  "version": "1.3",
+  "stage": {
+    "background": "#FFFFFF",
+    "width": 800,
+    "height": 400,
+    "objects": [
+      {
+        "x": 20, "y": 20, "rotation": 0, "id": 0, "width": 120, "height": 60,
+        "uid": "com.gliffy.shape.flowchart.flowchart_v1.default.start_end",
+        "order": 0,
+        "graphic": { "type": "Shape", "Shape": { "tid": "com.gliffy.stencil.start_end.flowchart_v1" } },
+        "children": [
+          { "x": 2, "y": 0, "id": 1, "uid": null, "graphic": { "type": "Text", "Text": { "html": "<p style=\"text-align:center;\"><span style=\"font-weight:bold;\">Форма</span><br>входу</p>" } }, "children": [] }
+        ]
+      },
+      {
+        "x": 300, "y": 20, "id": 2, "width": 120, "height": 60,
+        "uid": "com.gliffy.shape.flowchart.flowchart_v1.default.process",
+        "graphic": { "type": "Shape", "Shape": {} },
+        "children": [
+          { "id": 3, "graphic": { "type": "Text", "Text": { "html": "<p>Кабінет</p>" } } }
+        ]
+      },
+      {
+        "x": 300, "y": 200, "id": 4, "width": 120, "height": 60,
+        "uid": "com.gliffy.shape.flowchart.flowchart_v1.default.process",
+        "graphic": { "type": "Shape", "Shape": {} },
+        "children": [
+          { "id": 5, "graphic": { "type": "Text", "Text": { "html": "<p>Помилка&nbsp;пароля</p>" } } }
+        ]
+      },
+      {
+        "x": 0, "y": 0, "id": 6, "uid": "com.gliffy.shape.basic.basic_v1.default.line",
+        "graphic": { "type": "Line", "Line": { "strokeWidth": 2, "points": [[140, 50], [300, 50]] } },
+        "children": [
+          { "id": 7, "graphic": { "type": "Text", "Text": { "html": "<p>пароль вірний</p>" } } }
+        ],
+        "constraints": {
+          "constraints": [],
+          "startConstraint": { "type": "StartPositionConstraint", "StartPositionConstraint": { "nodeId": 0, "py": 0.5, "px": 1 } },
+          "endConstraint": { "type": "EndPositionConstraint", "EndPositionConstraint": { "nodeId": 2, "py": 0.5, "px": 0 } }
+        }
+      },
+      {
+        "x": 0, "y": 0, "id": 8, "uid": "com.gliffy.shape.basic.basic_v1.default.line",
+        "graphic": { "type": "Line", "Line": {} },
+        "children": [],
+        "constraints": {
+          "startConstraint": { "type": "StartPositionConstraint", "StartPositionConstraint": { "nodeId": 0 } },
+          "endConstraint": { "type": "EndPositionConstraint", "EndPositionConstraint": { "nodeId": 4 } }
+        }
+      },
+      {
+        "x": 500, "y": 300, "id": 9, "uid": "com.gliffy.shape.basic.basic_v1.default.group",
+        "graphic": null,
+        "children": [
+          {
+            "x": 0, "y": 0, "id": 10, "uid": "com.gliffy.shape.basic.basic_v1.default.rectangle",
+            "graphic": { "type": "Shape", "Shape": {} },
+            "children": [ { "id": 11, "graphic": { "type": "Text", "Text": { "html": "<p>Підтримка</p>" } } } ]
+          }
+        ]
+      },
+      {
+        "x": 600, "y": 20, "id": 12, "uid": null,
+        "graphic": { "type": "Text", "Text": { "html": "<p>Примітка: 3 спроби</p>" } }
+      }
+    ]
+  }
+}
