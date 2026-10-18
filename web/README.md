@@ -23,12 +23,15 @@ npx tsc --noEmit -p web/tsconfig.json
 
 | Адреса | Екран | Головне джерело даних |
 |---|---|---|
-| `/` | Дашборд: черга рішень, KPI, модулі, нестабільні кейси, останні прогони | `GET /api/registry/dashboard` |
-| `/cases` | Реєстр: дерево секцій, таблиця, деталі кейса, масові дії | `GET /api/registry/cases`, `/sections`, `/cases/:id` |
-| `/proposals` | Черга апрувів AI | `GET /api/registry/proposals` |
-| `/runs`, `/runs/:id` | Прогони і режим проходження чек-листа | `GET /api/registry/runs`, `/runs/:id` |
-| `/coverage` | Джерела вимог, матриця покриття, AI-скіли | `GET /api/registry/coverage`, `/sources` |
-| `/settings` | Проєкт, інтеграції, мапінг TestRail, дефолти, журнал скілів | `GET /api/registry/testrail/mappings`, `/skills/runs`, `/api/settings` |
+| `/` | Огляд: цикл із агентами (що чекає рішення, задачі за станами, трасування, тести за рівнями, main, коміти повз PR, прийняття за моделями, стан інтеграцій) і наявні KPI реєстру | `GET /api/registry/dashboard/agentic`, `/dashboard` |
+| `/inputs`, `/inputs/:sourceId` | Дерево Confluence і файли Figma, сторінка з картинками й кадрами, погодження прочитань | `GET /api/registry/sources/tree`, `/sources/:id/view`, `/assets` |
+| `/setup` | Майстер нового проєкту: repo, корені Confluence, Figma, модулі, токен CI | `POST /api/registry/projects`, `/inputs/*`, `/tokens` |
+| `/cases` | Реєстр: дерево секцій, таблиця, деталі кейса з тестами в коді, масові дії | `GET /api/registry/cases`, `/sections`, `/cases/:id`, `/tests` |
+| `/proposals` | Погодження: план від агента, зміни вимог, зарезервовані кейси | `GET /api/registry/proposals` |
+| `/tasks`, `/tasks/:id` | Задачі агентів: запит QA, «Що перевіряє», PR, підтвердження наміру, «інакше», повтор | `GET /api/registry/tasks`, `/tasks/:id` |
+| `/runs`, `/runs/:id` | Ручні прогони і прогони CI за комітом | `GET /api/registry/runs`, `/runs/:id` |
+| `/coverage` | Матриця покриття, «Від вимоги до результату» (`?tab=trace`), «Тести в коді» (`?tab=tests`) з карантином | `GET /api/registry/coverage`, `/sources`, `/tests` |
+| `/settings` | Проєкт (repo, Jira, Telegram, пороги), доступ і токени, підключення й стан систем, модулі (шляхи коду, власники), прогони й AI, звіти | `GET /api/registry/me`, `/users`, `/tokens`, `/health`, `/reports/weekly`, `/notifications` |
 
 Фільтри, сортування, сторінка й вибраний кейс зберігаються в query-параметрах,
 тому будь-який вид можна переслати посиланням.

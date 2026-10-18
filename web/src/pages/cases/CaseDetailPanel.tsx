@@ -1,7 +1,8 @@
 /**
  * Деталі кейса: заголовок, передумови, `checks` із редагуванням по одному
  * елементу (додати / видалити / вгору / вниз), теги, зв'язок із вимогою,
- * вкладки «Історія» і «Автоматизація».
+ * вкладки «Історія» і «Автоматизація». Над вкладками — «Тести в коді»:
+ * тести кейса з репозиторію продукту і «Попросити тест».
  *
  * Зміни не пишуться на кожне натискання: збираємо чернетку й зберігаємо
  * одним `PATCH /cases/:id` — сервер на кожен PATCH створює ревізію.
@@ -34,6 +35,8 @@ import {
 } from '../../strings';
 import type { AutomationStatus, CaseDetail, CaseKind, CasePriority, CaseStatus } from '../../types';
 import { AUTOMATION_STATUSES, CASE_KINDS, CASE_PRIORITIES, CASE_STATUSES } from '../../types';
+import { CaseTestsSection } from '../coverage/CaseTestsSection';
+import { traceHref } from '../coverage/TestBits';
 import { flakeTone, formatAgo, formatDateTime, formatPercent, parseTags, stringifyValue } from '../../utils/format';
 
 type Tab = 'fields' | 'history' | 'automation';
@@ -163,6 +166,7 @@ function CaseBody({
           <AutomationChip status={item.automation.status} reason={item.automation.quarantineReason} />
         </div>
         <p className="muted text-xs">{item.sectionPath}</p>
+        <CaseTestsSection caseId={item.id} caseTitle={item.title} />
       </div>
 
       <div className="tabs" role="tablist" aria-label={S.cases.detailTitle}>
@@ -396,7 +400,7 @@ function CaseBody({
                 )}
               </div>
             )}
-            <Link className="text-sm" to={`/coverage?case=${encodeURIComponent(item.id)}`}>
+            <Link className="text-sm" to={traceHref(item.id)}>
               {S.dashboard.goCoverage} →
             </Link>
           </div>

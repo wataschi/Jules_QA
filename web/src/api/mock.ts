@@ -312,6 +312,8 @@ let coverageLinks: Coverage[] = [
   { id: 'cov-3', blockId: 'blk-3', caseId: 'CYBER-REGL-003', kind: 'quote', confirmed: false, note: '', createdAt: iso(5000) },
   { id: 'cov-4', blockId: 'blk-1', caseId: 'CYBER-REGL-004', kind: 'derived', confirmed: false, note: '', createdAt: iso(5000) },
   { id: 'cov-5', blockId: 'blk-6', caseId: 'CYBER-REP-002', kind: 'quote', confirmed: true, note: '', createdAt: iso(5000) },
+  { id: 'cov-6', blockId: 'blk-7', caseId: 'CYBER-REP-001', kind: 'quote', confirmed: true, note: '', createdAt: iso(5000) },
+  { id: 'cov-7', blockId: 'blk-1', caseId: 'CYBER-REGC-001', kind: 'derived', confirmed: true, note: '', createdAt: iso(5000) },
 ];
 
 let proposals: Proposal[] = [

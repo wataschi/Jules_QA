@@ -2,6 +2,10 @@
  * Покриття вимог: джерела (імпорт Confluence за URL або вставлений текст),
  * матриця «блок вимоги → кейси» з підсвіткою прогалин, запуск скілів
  * «Згенерувати кейси» і «Перевірити покриття», індикатор «змінилось у джерелі».
+ *
+ * Ще дві вкладки (Jules 2.0): «Від вимоги до результату» — матриця в чотири
+ * шари «вимога → кейс → тест у коді → результат» з прогалинами, і «Тести
+ * в коді» — що лежить у репозиторії продукту. Активна вкладка — `?tab=`.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -15,6 +19,7 @@ import {
   CoverageKindChip,
   PageHead,
   SelectField,
+  Tabs,
   TextArea,
   TextField,
 } from '../components/ui';
@@ -25,6 +30,15 @@ import { S, sourceKindLabel } from '../strings';
 import type { BlockChangeState, SourceKind, ValidateCoverageResult } from '../types';
 import { flattenSections } from './cases/BulkActions';
 import { formatAgo, formatDateTime, formatPercent } from '../utils/format';
+import { CodeTestsTab } from './coverage/CodeTestsTab';
+import { SC } from './coverage/strings';
+import { TraceTab } from './coverage/TraceTab';
+import '../styles/coverage.css';
+
+type CoverageTab = 'matrix' | 'trace' | 'tests';
+const COVERAGE_TABS: CoverageTab[] = ['matrix', 'trace', 'tests'];
+/** Параметри адреси, які належать одній вкладці й не мають тягнутись в іншу. */
+const TAB_PARAMS = ['gap', 'case', 'level', 'nocase', 'failed', 'q', 'page'];
 
 const CHANGE_LABEL: Record<BlockChangeState, string> = {
   new: S.coverage.blockChangeNew,
@@ -41,10 +55,12 @@ const CHANGE_TONE: Record<BlockChangeState, 'neutral' | 'accent' | 'warn' | 'bad
 };
 
 export default function CoveragePage() {
-  const { projectId } = useApp();
+  const { projectId, project } = useApp();
   const toast = useToast();
   const params = useQueryParams();
 
+  const rawTab = params.get('tab') as CoverageTab;
+  const tab: CoverageTab = COVERAGE_TABS.includes(rawTab) ? rawTab : 'matrix';
   const sourceId = params.get('source');
   const [importing, setImporting] = useState(false);
   const [selectedBlocks, setSelectedBlocks] = useState<Set<string>>(new Set());
@@ -156,223 +172,255 @@ export default function CoveragePage() {
         }
       />
 
-      {/* ── джерела вимог ── */}
-      <section className="card">
-        <div className="card-head">
-          <h2>{S.coverage.sources}</h2>
-        </div>
-        {sourcesState.loading && sourcesState.data === undefined ? (
-          <Loading rows={3} />
-        ) : sourcesState.error && sourcesState.data === undefined ? (
-          <ErrorState message={sourcesState.error} status={sourcesState.status} onRetry={sourcesState.reload} />
-        ) : (sourcesState.data ?? []).length === 0 ? (
-          <Empty
-            title={S.empty.sources}
-            hint={S.empty.sourcesHint}
-            action={
-              <button type="button" className="btn btn-sm" onClick={() => setImporting(true)}>
-                {S.coverage.import}
-              </button>
-            }
-          />
-        ) : (
-          <div className="table-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th scope="col">{S.coverage.importTitleField}</th>
-                  <th scope="col">{S.coverage.importKind}</th>
-                  <th scope="col">{S.coverage.colBlock}</th>
-                  <th scope="col">{S.coverage.gap}</th>
-                  <th scope="col">{S.cases.updated}</th>
-                  <th scope="col" />
-                </tr>
-              </thead>
-              <tbody>
-                {(sourcesState.data ?? []).map((item) => (
-                  <tr key={item.id} className={sourceId === item.id ? 'selected' : ''}>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => params.set({ source: sourceId === item.id ? null : item.id })}
-                      >
-                        {item.title}
-                      </button>
-                      {/* Саме `> 0`, а не істинність: інакше React виводить «0» поруч із назвою. */}
-                      {(item.changed ?? 0) > 0 && <Chip tone="warn">{S.coverage.changedBadge}</Chip>}
-                    </td>
-                    <td>{sourceKindLabel[item.kind]}</td>
-                    <td className="cell-num mono">{item.blockCount ?? S.common.none}</td>
-                    <td className="cell-num mono">{item.gapCount ?? S.common.none}</td>
-                    <td className="nowrap text-xs muted" title={formatDateTime(item.updatedAt)}>
-                      {formatAgo(item.updatedAt)}
-                    </td>
-                    <td className="nowrap">
-                      {item.url && (
-                        <a href={item.url} target="_blank" rel="noreferrer noopener" className="text-xs">
-                          {S.common.openLink}
-                        </a>
-                      )}
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void refresh(item.id)}>
-                        {S.coverage.refresh}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <Tabs
+        label={SC.tabs.label}
+        active={tab}
+        onPick={(next) =>
+          params.set({
+            tab: next === 'matrix' ? null : next,
+            ...Object.fromEntries(TAB_PARAMS.map((key) => [key, null])),
+          })
+        }
+        tabs={[
+          { value: 'matrix', label: SC.tabs.matrix },
+          { value: 'trace', label: SC.tabs.trace },
+          { value: 'tests', label: SC.tabs.tests },
+        ]}
+      />
 
-      {/* ── скіли ── */}
-      <section className="card">
-        <div className="card-head">
-          <h2>{S.coverage.writeCases}</h2>
-          <span className="spacer" />
-          <span className="muted text-xs">
-            {selectedBlocks.size > 0 ? S.coverage.selectedBlocks(selectedBlocks.size) : S.coverage.needBlocks}
-          </span>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-2">
-            <SelectField
-              label={S.coverage.targetSection}
-              value={effectiveSection}
-              onChange={setTargetSection}
-              options={sections}
-              hint={sections.length === 0 ? S.empty.treeHint : undefined}
-            />
-            <TextField
-              label={S.coverage.maxPerBlock}
-              value={maxPerBlock}
-              onChange={setMaxPerBlock}
-              type="number"
-            />
-          </div>
-          <CheckField label={S.coverage.includeDerived} checked={includeDerived} onChange={setIncludeDerived} />
-          <div className="row-wrap">
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={writeCases}
-              disabled={skillBusy !== null || selectedBlocks.size === 0}
-              title={selectedBlocks.size === 0 ? S.coverage.needBlocks : undefined}
-            >
-              {skillBusy === 'write'
-                ? S.coverage.writeCasesRunning
-                : selectedBlocks.size > 0
-                  ? S.coverage.writeCasesFor(selectedBlocks.size)
-                  : S.coverage.writeCases}
-            </button>
-            <button type="button" className="btn btn-sm" onClick={validate} disabled={skillBusy !== null}>
-              {skillBusy === 'validate' ? S.coverage.validateRunning : S.coverage.validate}
-            </button>
-            <Link className="btn btn-sm btn-ghost" to="/proposals">
-              {S.dashboard.goProposals} →
-            </Link>
-          </div>
-        </div>
-      </section>
+      {tab === 'trace' && (
+        <TraceTab
+          projectId={projectId}
+          repo={project?.repo}
+          params={params}
+          coverageState={coverageState}
+          sources={sourcesState.data ?? []}
+        />
+      )}
 
-      {report && <ValidationReport report={report} onClose={() => setReport(null)} />}
+      {tab === 'tests' && <CodeTestsTab projectId={projectId} repo={project?.repo} params={params} />}
 
-      {/* ── матриця ── */}
-      <section className="card">
-        <div className="card-head">
-          <h2>{S.coverage.matrix}</h2>
-          <span className="spacer" />
-          {coverageState.data && (
-            <span className="muted text-xs">
-              {S.coverage.statsLine(
-                coverageState.data.stats.blocks,
-                coverageState.data.stats.coveredBlocks,
-                coverageState.data.stats.gaps,
-              )}
-              {' · '}
-              {S.dashboard.derivedShare}: {formatPercent(coverageState.data.stats.derivedShare)}
-            </span>
-          )}
-        </div>
-        <Async
-          state={coverageState}
-          skeletonRows={6}
-          empty={{ title: S.empty.coverage, hint: S.empty.coverageHint }}
-        >
-          {(data) =>
-            data.rows.length === 0 ? (
-              <Empty title={S.empty.coverage} hint={S.empty.coverageHint} />
+      {tab === 'matrix' && (
+        <>
+          {/* ── джерела вимог ── */}
+          <section className="card">
+            <div className="card-head">
+              <h2>{S.coverage.sources}</h2>
+            </div>
+            {sourcesState.loading && sourcesState.data === undefined ? (
+              <Loading rows={3} />
+            ) : sourcesState.error && sourcesState.data === undefined ? (
+              <ErrorState message={sourcesState.error} status={sourcesState.status} onRetry={sourcesState.reload} />
+            ) : (sourcesState.data ?? []).length === 0 ? (
+              <Empty
+                title={S.empty.sources}
+                hint={S.empty.sourcesHint}
+                action={
+                  <button type="button" className="btn btn-sm" onClick={() => setImporting(true)}>
+                    {S.coverage.import}
+                  </button>
+                }
+              />
             ) : (
               <div className="table-wrap">
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th scope="col" className="col-check">
-                        <span className="visually-hidden">{S.coverage.selectBlocks}</span>
-                      </th>
+                      <th scope="col">{S.coverage.importTitleField}</th>
+                      <th scope="col">{S.coverage.importKind}</th>
                       <th scope="col">{S.coverage.colBlock}</th>
-                      <th scope="col">{S.coverage.colCases}</th>
-                      <th scope="col">{S.coverage.colState}</th>
+                      <th scope="col">{S.coverage.gap}</th>
+                      <th scope="col">{S.cases.updated}</th>
+                      <th scope="col" />
                     </tr>
                   </thead>
                   <tbody>
-                    {data.rows.map((row) => (
-                      <tr key={row.block.id} className={`matrix-row${row.gap ? ' gap' : ''}`}>
-                        <td className="col-check">
-                          <input
-                            type="checkbox"
-                            checked={selectedBlocks.has(row.block.id)}
-                            onChange={() => toggleBlock(row.block.id)}
-                            aria-label={`${S.coverage.selectBlocks}: ${row.block.heading || row.block.id}`}
-                          />
-                        </td>
+                    {(sourcesState.data ?? []).map((item) => (
+                      <tr key={item.id} className={sourceId === item.id ? 'selected' : ''}>
                         <td>
-                          <div className="matrix-block">
-                            {row.block.heading && <strong>{row.block.heading}</strong>}
-                            <p className="text-sm">{row.block.text}</p>
-                            {row.block.anchor && <span className="mono text-xs muted">#{row.block.anchor}</span>}
-                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => params.set({ source: sourceId === item.id ? null : item.id })}
+                          >
+                            {item.title}
+                          </button>
+                          {/* Саме `> 0`, а не істинність: інакше React виводить «0» поруч із назвою. */}
+                          {(item.changed ?? 0) > 0 && <Chip tone="warn">{S.coverage.changedBadge}</Chip>}
                         </td>
-                        <td>
-                          {row.cases.length === 0 ? (
-                            <span className="muted text-xs">{S.common.none}</span>
-                          ) : (
-                            <div className="matrix-cases">
-                              {row.cases.map((item) => (
-                                <Link
-                                  key={item.caseId}
-                                  className="tag"
-                                  to={`/cases?case=${encodeURIComponent(item.caseId)}`}
-                                  title={item.title}
-                                >
-                                  {item.caseId}
-                                  {item.kind === 'derived' ? ' ◇' : ''}
-                                  {item.confirmed ? ' ✓' : ''}
-                                </Link>
-                              ))}
-                            </div>
-                          )}
+                        <td>{sourceKindLabel[item.kind]}</td>
+                        <td className="cell-num mono">{item.blockCount ?? S.common.none}</td>
+                        <td className="cell-num mono">{item.gapCount ?? S.common.none}</td>
+                        <td className="nowrap text-xs muted" title={formatDateTime(item.updatedAt)}>
+                          {formatAgo(item.updatedAt)}
                         </td>
                         <td className="nowrap">
-                          {row.gap ? <Chip tone="warn">{S.coverage.gap}</Chip> : <Chip tone="good">{S.coverage.covered}</Chip>}
-                          <Chip tone={CHANGE_TONE[row.block.changeState]}>{CHANGE_LABEL[row.block.changeState]}</Chip>
+                          {item.url && (
+                            <a href={item.url} target="_blank" rel="noreferrer noopener" className="text-xs">
+                              {S.common.openLink}
+                            </a>
+                          )}
+                          <button type="button" className="btn btn-sm btn-ghost" onClick={() => void refresh(item.id)}>
+                            {S.coverage.refresh}
+                          </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="card-body" style={{ paddingTop: 'var(--sp-2)' }}>
-                  <div className="row-wrap text-xs muted">
-                    <CoverageKindChip kind="quote" /> — {S.cases.requirementQuote}
-                    <CoverageKindChip kind="derived" /> — {S.cases.requirementDerived} (◇)
-                  </div>
-                </div>
               </div>
-            )
-          }
-        </Async>
-      </section>
+            )}
+          </section>
+
+          {/* ── скіли ── */}
+          <section className="card">
+            <div className="card-head">
+              <h2>{S.coverage.writeCases}</h2>
+              <span className="spacer" />
+              <span className="muted text-xs">
+                {selectedBlocks.size > 0 ? S.coverage.selectedBlocks(selectedBlocks.size) : S.coverage.needBlocks}
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="grid grid-2">
+                <SelectField
+                  label={S.coverage.targetSection}
+                  value={effectiveSection}
+                  onChange={setTargetSection}
+                  options={sections}
+                  hint={sections.length === 0 ? S.empty.treeHint : undefined}
+                />
+                <TextField
+                  label={S.coverage.maxPerBlock}
+                  value={maxPerBlock}
+                  onChange={setMaxPerBlock}
+                  type="number"
+                />
+              </div>
+              <CheckField label={S.coverage.includeDerived} checked={includeDerived} onChange={setIncludeDerived} />
+              <div className="row-wrap">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={writeCases}
+                  disabled={skillBusy !== null || selectedBlocks.size === 0}
+                  title={selectedBlocks.size === 0 ? S.coverage.needBlocks : undefined}
+                >
+                  {skillBusy === 'write'
+                    ? S.coverage.writeCasesRunning
+                    : selectedBlocks.size > 0
+                      ? S.coverage.writeCasesFor(selectedBlocks.size)
+                      : S.coverage.writeCases}
+                </button>
+                <button type="button" className="btn btn-sm" onClick={validate} disabled={skillBusy !== null}>
+                  {skillBusy === 'validate' ? S.coverage.validateRunning : S.coverage.validate}
+                </button>
+                <Link className="btn btn-sm btn-ghost" to="/proposals">
+                  {S.dashboard.goProposals} →
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          {report && <ValidationReport report={report} onClose={() => setReport(null)} />}
+
+          {/* ── матриця ── */}
+          <section className="card">
+            <div className="card-head">
+              <h2>{S.coverage.matrix}</h2>
+              <span className="spacer" />
+              {coverageState.data && (
+                <span className="muted text-xs">
+                  {S.coverage.statsLine(
+                    coverageState.data.stats.blocks,
+                    coverageState.data.stats.coveredBlocks,
+                    coverageState.data.stats.gaps,
+                  )}
+                  {' · '}
+                  {S.dashboard.derivedShare}: {formatPercent(coverageState.data.stats.derivedShare)}
+                </span>
+              )}
+            </div>
+            <Async
+              state={coverageState}
+              skeletonRows={6}
+              empty={{ title: S.empty.coverage, hint: S.empty.coverageHint }}
+            >
+              {(data) =>
+                data.rows.length === 0 ? (
+                  <Empty title={S.empty.coverage} hint={S.empty.coverageHint} />
+                ) : (
+                  <div className="table-wrap">
+                    <table className="tbl">
+                      <thead>
+                        <tr>
+                          <th scope="col" className="col-check">
+                            <span className="visually-hidden">{S.coverage.selectBlocks}</span>
+                          </th>
+                          <th scope="col">{S.coverage.colBlock}</th>
+                          <th scope="col">{S.coverage.colCases}</th>
+                          <th scope="col">{S.coverage.colState}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.rows.map((row) => (
+                          <tr key={row.block.id} className={`matrix-row${row.gap ? ' gap' : ''}`}>
+                            <td className="col-check">
+                              <input
+                                type="checkbox"
+                                checked={selectedBlocks.has(row.block.id)}
+                                onChange={() => toggleBlock(row.block.id)}
+                                aria-label={`${S.coverage.selectBlocks}: ${row.block.heading || row.block.id}`}
+                              />
+                            </td>
+                            <td>
+                              <div className="matrix-block">
+                                {row.block.heading && <strong>{row.block.heading}</strong>}
+                                <p className="text-sm">{row.block.text}</p>
+                                {row.block.anchor && <span className="mono text-xs muted">#{row.block.anchor}</span>}
+                              </div>
+                            </td>
+                            <td>
+                              {row.cases.length === 0 ? (
+                                <span className="muted text-xs">{S.common.none}</span>
+                              ) : (
+                                <div className="matrix-cases">
+                                  {row.cases.map((item) => (
+                                    <Link
+                                      key={item.caseId}
+                                      className="tag"
+                                      to={`/cases?case=${encodeURIComponent(item.caseId)}`}
+                                      title={item.title}
+                                    >
+                                      {item.caseId}
+                                      {item.kind === 'derived' ? ' ◇' : ''}
+                                      {item.confirmed ? ' ✓' : ''}
+                                    </Link>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="nowrap">
+                              {row.gap ? <Chip tone="warn">{S.coverage.gap}</Chip> : <Chip tone="good">{S.coverage.covered}</Chip>}
+                              <Chip tone={CHANGE_TONE[row.block.changeState]}>{CHANGE_LABEL[row.block.changeState]}</Chip>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="card-body" style={{ paddingTop: 'var(--sp-2)' }}>
+                      <div className="row-wrap text-xs muted">
+                        <CoverageKindChip kind="quote" /> — {S.cases.requirementQuote}
+                        <CoverageKindChip kind="derived" /> — {S.cases.requirementDerived} (◇)
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+            </Async>
+          </section>
+        </>
+      )}
 
       {importing && (
         <ImportDialog

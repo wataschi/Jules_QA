@@ -1,0 +1,239 @@
+/*
+ * Покриття: трасування «вимога → кейс → тест у коді → результат»,
+ * перелік тестів у коді й розділ «Тести в коді» в деталях кейса.
+ * Кольори — лише токени з tokens.css, тож світла й темна теми працюють.
+ */
+
+/* ───────────────────────────── трасування ───────────────────────────── */
+
+.trace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trace-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(0, 3fr);
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--grid-line);
+  min-width: 0;
+}
+.trace-row:last-child {
+  border-bottom: 0;
+}
+/* Вимога без кейсів — та сама підсвітка, що й у матриці. */
+.trace-row.gap {
+  background: var(--warn-soft);
+}
+.trace-req {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.trace-req-title {
+  font-size: var(--fs-sm);
+}
+.trace-req-text {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.trace-cases {
+  min-width: 0;
+}
+.trace-gap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.trace-case-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.trace-case {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--good-border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.trace-case.no-tests {
+  border-left-color: var(--warn);
+  background: var(--warn-soft);
+}
+.trace-case.failed {
+  border-left-color: var(--bad);
+}
+.trace-case-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+.trace-case-id {
+  font-weight: 600;
+}
+.trace-case-title {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trace-ask {
+  margin-left: auto;
+}
+.trace-case-filter {
+  align-self: flex-end;
+  padding-bottom: 2px;
+}
+.trace-bad {
+  color: var(--bad);
+}
+
+/* Рядки тестів: рівень · автор · файл і назва · стан і результат. */
+.trace-tests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.trace-test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.trace-test.failed {
+  background: var(--bad-soft);
+  box-shadow: inset 2px 0 0 var(--bad);
+}
+.trace-test-main {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.trace-test-name {
+  overflow-wrap: anywhere;
+}
+.trace-test-result {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+}
+.test-file {
+  overflow-wrap: break-word;
+}
+
+.test-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.test-author.agent {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ───────────────────────────── тести в коді ─────────────────────────── */
+
+.tests-orphans strong {
+  color: inherit;
+}
+.tests-orphans span {
+  color: var(--text);
+}
+.tests-orphans > span[aria-hidden='true'] {
+  color: var(--warn);
+  font-size: var(--fs-lg);
+  line-height: 1.2;
+}
+table.tbl.tbl-tests {
+  min-width: 980px;
+}
+table.tbl.tbl-tests td {
+  height: auto;
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-2);
+}
+table.tbl.tbl-tests td.cell-file {
+  min-width: 200px;
+  max-width: 280px;
+}
+table.tbl.tbl-tests .tag {
+  white-space: nowrap;
+}
+table.tbl.tbl-tests td.cell-name {
+  min-width: 220px;
+  max-width: 360px;
+  overflow-wrap: anywhere;
+}
+table.tbl.tbl-tests tr.test-orphan {
+  background: var(--warn-soft);
+}
+table.tbl.tbl-tests tr.test-failed td:first-child {
+  box-shadow: inset 2px 0 0 var(--bad);
+}
+
+/* ─────────────────────── деталі кейса: тести ────────────────────────── */
+
+.case-tests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-2);
+  margin: var(--sp-1) 0 var(--sp-2);
+}
+.case-tests h3 {
+  margin: 0;
+}
+.case-tests-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--warn-border);
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+}
+
+/* ───────────────────────────── вузькі екрани ────────────────────────── */
+
+@media (max-width: 900px) {
+  .trace-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trace-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+  }
+  .trace-ask {
+    margin-left: 0;
+  }
+}
