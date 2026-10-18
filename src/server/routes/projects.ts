@@ -1,6 +1,6 @@
 /** Маршрути реєстру: проєкти. */
 import type { Router } from 'express';
-import { projectInputSchema } from '../../registry/types.js';
+import { projectInputSchema, projectSettingsPatchSchema } from '../../registry/types.js';
 import { createProject, getProject, listProjects, updateProject } from '../../registry/projects-store.js';
 import { fail } from './common.js';
 
@@ -32,7 +32,12 @@ export function registerProjectsRoutes(router: Router): void {
 
   router.patch('/projects/:id', (req, res) => {
     try {
-      const patch = projectInputSchema.partial().parse(req.body);
+      // Налаштування — без значень за замовчуванням: їх злиття з наявними робить сховище.
+      const patch = projectInputSchema
+        .omit({ settings: true })
+        .partial()
+        .extend({ settings: projectSettingsPatchSchema.optional() })
+        .parse(req.body);
       res.json(updateProject(req.params.id, patch));
     } catch (error) {
       fail(res, error);

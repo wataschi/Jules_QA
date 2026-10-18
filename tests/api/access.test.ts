@@ -120,3 +120,36 @@ describe('доступ: Tailscale, ролі й токени', () => {
     expect([200, 404]).toContain((await request(app).get('/cli/jules-qa.mjs')).status);
   });
 });
+
+describe('налаштування проєкту зливаються, а не затираються', () => {
+  let temp: TempRegistry;
+  let app: Application;
+
+  beforeEach(() => {
+    temp = createTempRegistry();
+    delete process.env.JULES_API_TOKEN;
+    app = createApp();
+  });
+
+  afterEach(() => temp.cleanup());
+
+  it('часткове оновлення settings не скидає решту полів до значень за замовчуванням', async () => {
+    const project = (await request(app).post(`${BASE}/projects`).send({ key: 'CYBER', name: 'Кібер' })).body;
+    await request(app)
+      .patch(`${BASE}/projects/${project.id}`)
+      .send({ settings: { confluenceRoots: ['229300000'], thresholds: { staleTaskHours: 12, leaseMinutes: 45, mutationP1: 70, flakeScore: 0.2 } } });
+
+    const res = await request(app).patch(`${BASE}/projects/${project.id}`).send({ settings: { jira: { projectKey: 'CYB' } } });
+    expect(res.status).toBe(200);
+    expect(res.body.settings.confluenceRoots).toEqual(['229300000']);
+    expect(res.body.settings.thresholds.staleTaskHours).toBe(12);
+    expect(res.body.settings.jira).toMatchObject({ projectKey: 'CYB', issueType: 'Task' });
+  });
+
+  it('оновлення одного порога не скидає інші пороги', async () => {
+    const project = (await request(app).post(`${BASE}/projects`).send({ key: 'CYBER', name: 'Кібер' })).body;
+    await request(app).patch(`${BASE}/projects/${project.id}`).send({ settings: { thresholds: { leaseMinutes: 45 } } });
+    const res = await request(app).patch(`${BASE}/projects/${project.id}`).send({ settings: { thresholds: { staleTaskHours: 12 } } });
+    expect(res.body.settings.thresholds).toMatchObject({ leaseMinutes: 45, staleTaskHours: 12, mutationP1: 60 });
+  });
+});

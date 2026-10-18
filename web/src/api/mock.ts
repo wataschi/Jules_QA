@@ -90,6 +90,13 @@ const project: Project = {
   description: 'Фікстури для розробки інтерфейсу',
   baseUrl: 'https://app.example.com',
   confluenceSpace: 'CYBER',
+  repo: 'acme/cabinet',
+  settings: {
+    confluenceRoots: ['https://wiki.corp.local/pages/viewpage.action?pageId=229300000'],
+    figmaFiles: ['https://www.figma.com/design/AbC123xYz/Payments'],
+    telegram: { enabled: false },
+    thresholds: { staleTaskHours: 24, leaseMinutes: 30, mutationP1: 60, flakeScore: 0.3 },
+  },
   createdAt: iso(60 * 24 * 40),
   updatedAt: iso(30),
 };
@@ -1622,4 +1629,16 @@ export const mockApi: JulesApi = {
     ),
   legacySaveSettings: (settings, signal) => delay(settings, 220, signal),
   legacyCheckLlm: (signal) => delay({ ok: true, models: ['fixture-model'] }, 300, signal),
+
+  // Перекриває заглушку з mock-v2: налаштування зливаються з наявними, як на сервері.
+  patchProjectV2: (_id, patch, signal) => {
+    const settings = project.settings ?? { confluenceRoots: [], figmaFiles: [], telegram: { enabled: false }, thresholds: { staleTaskHours: 24, leaseMinutes: 30, mutationP1: 60, flakeScore: 0.3 } };
+    const merged = { ...settings } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(patch.settings ?? {})) {
+      const before = merged[key];
+      merged[key] = value && typeof value === 'object' && !Array.isArray(value) && before && typeof before === 'object' ? { ...before, ...value } : value;
+    }
+    Object.assign(project, patch, { settings: merged, updatedAt: new Date().toISOString() });
+    return delay(project, 160, signal);
+  },
 };

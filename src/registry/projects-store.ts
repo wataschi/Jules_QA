@@ -91,7 +91,28 @@ const PATCHABLE: Record<string, string> = {
   repo: 'repo',
 };
 
-export function updateProject(id: string, patch: Partial<ProjectInput>): Project {
+/** Часткові налаштування з PATCH: вкладені об'єкти теж часткові. */
+export type ProjectSettingsPatch = { [K in keyof ProjectSettings]?: ProjectSettings[K] extends Record<string, unknown> | undefined ? Partial<NonNullable<ProjectSettings[K]>> : ProjectSettings[K] };
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Зливає часткові налаштування з наявними: вкладені об'єкти (пороги, Jira,
+ * Telegram) — по полях, щоб форма, яка шле лише змінене, нічого не скидала.
+ */
+export function mergeSettings(current: ProjectSettings, patch: ProjectSettingsPatch): ProjectSettings {
+  const merged: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    const before = merged[key];
+    merged[key] = isPlainObject(value) && isPlainObject(before) && key !== 'levels' ? { ...before, ...value } : value;
+  }
+  return projectSettingsSchema.parse(merged);
+}
+
+export function updateProject(id: string, patch: Partial<Omit<ProjectInput, 'settings'>> & { settings?: ProjectSettingsPatch }): Project {
   const existing = requireProject(id);
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -106,7 +127,7 @@ export function updateProject(id: string, patch: Partial<ProjectInput>): Project
   if (patch.settings !== undefined) {
     // Налаштування зливаються з наявними: форма в UI шле лише змінену частину.
     sets.push('settings = ?');
-    params.push(toJson(projectSettingsSchema.parse({ ...existing.settings, ...patch.settings })));
+    params.push(toJson(mergeSettings(existing.settings, patch.settings)));
   }
 
   if (sets.length === 0) return existing;

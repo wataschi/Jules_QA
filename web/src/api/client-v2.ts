@@ -119,9 +119,10 @@ export const httpApiV2: V2Api = {
   loadConfluenceTree: (projectId, ref, signal) =>
     request<{ sources: SourceNode[]; truncated: boolean }>(`${R}/inputs/confluence/tree`, { method: 'POST', body: { projectId, ref }, signal }),
   modulesFromTree: (projectId, rootSourceId, signal) =>
-    request(`${R}/inputs/confluence/modules`, { method: 'POST', body: { projectId, rootSourceId }, signal }),
+    request<{ sections: Array<{ id: string; name: string; created: boolean; planTask: string | null }> }>(`${R}/inputs/confluence/modules`, { method: 'POST', body: { projectId, rootSourceId }, signal }),
   importFigma: (projectId, url, signal) => request<SyncResult>(`${R}/inputs/figma`, { method: 'POST', body: { projectId, url }, signal }),
-  syncInputs: (projectId, force, signal) => request(`${R}/inputs/sync`, { method: 'POST', body: { projectId, force: Boolean(force) }, signal }),
+  syncInputs: (projectId, force, signal) =>
+    request<{ results: SyncResult[]; errors: Array<{ sourceId: string; title: string; error: string }> }>(`${R}/inputs/sync`, { method: 'POST', body: { projectId, force: Boolean(force) }, signal }),
   syncSource: (id, signal) => request<SyncResult>(`${R}/sources/${enc(id)}/sync`, { method: 'POST', body: { force: true }, signal }),
   setBlockRoute: (blockId, route, signal) => request(`${R}/blocks/${enc(blockId)}`, { method: 'PATCH', body: { route }, signal }),
   listAssets: (projectId, readingState, signal) => request<Asset[]>(`${R}/assets${qs({ projectId, readingState })}`, { signal }),
@@ -156,9 +157,10 @@ export const httpApiV2: V2Api = {
   getHealth: (signal) => request<HealthResponse>(`${R}/health`, { signal }),
   runHealthChecks: (signal) => request<HealthResponse>(`${R}/health/check`, { method: 'POST', body: {}, signal }),
   getWeekly: (projectId, week, signal) => request<WeeklyPreview>(`${R}/reports/weekly${qs({ projectId, week })}`, { signal }),
-  publishWeekly: (projectId, input, signal) => request(`${R}/reports/weekly`, { method: 'POST', body: { projectId, ...input }, signal }),
-  listNotifications: (signal) => request(`${R}/notifications`, { signal }),
-  testNotification: (signal) => request(`${R}/notifications/test`, { method: 'POST', body: {}, signal }),
+  publishWeekly: (projectId, input, signal) =>
+    request<{ week: string; jira?: { key: string; url: string; created: boolean } }>(`${R}/reports/weekly`, { method: 'POST', body: { projectId, ...input }, signal }),
+  listNotifications: (signal) => request<{ configured: boolean; items: NotificationItem[] }>(`${R}/notifications`, { signal }),
+  testNotification: (signal) => request<{ ok: boolean }>(`${R}/notifications/test`, { method: 'POST', body: {}, signal }),
   patchProjectV2: (id, patch, signal) => request<Project>(`${R}/projects/${enc(id)}`, { method: 'PATCH', body: patch, signal }),
   patchSection: (id, patch, signal) => request(`${R}/sections/${enc(id)}`, { method: 'PATCH', body: patch, signal }),
 };

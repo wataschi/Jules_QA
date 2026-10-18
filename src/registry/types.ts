@@ -848,3 +848,29 @@ export interface HealthCheck {
   error?: string;
   details: Record<string, unknown>;
 }
+
+/**
+ * Часткові налаштування для PATCH: усі поля, включно з вкладеними, без значень
+ * за замовчуванням — інакше часткова форма скидала б те, чого не надсилала.
+ */
+export const projectSettingsPatchSchema = z.object({
+  confluenceRoots: z.array(z.string()).optional(),
+  figmaFiles: z.array(z.string()).optional(),
+  jira: z
+    .object({ projectKey: z.string().min(1), issueType: z.string(), assignee: z.string(), createBugs: z.boolean() })
+    .partial()
+    .optional(),
+  telegram: z.object({ chatId: z.string(), enabled: z.boolean() }).partial().optional(),
+  thresholds: z
+    .object({
+      staleTaskHours: z.number().positive(),
+      leaseMinutes: z.number().positive(),
+      mutationP1: z.number().min(0).max(100),
+      flakeScore: z.number().min(0).max(1),
+    })
+    .partial()
+    .optional(),
+  codeowners: z.string().optional(),
+  levels: z.record(z.string(), z.array(z.string())).optional(),
+  dashboardUrl: z.string().optional(),
+});

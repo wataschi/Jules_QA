@@ -224,3 +224,7 @@
     max-width: none;
   }
 }
+
+.card-body > .kv {
+  margin: 0;
+}
