@@ -60,7 +60,7 @@
   margin-top: auto;
   font-size: var(--fs-sm);
   font-weight: 500;
-  color: var(--accent-text, var(--accent));
+  color: var(--accent);
 }
 
 .agentic-oldest {
@@ -101,9 +101,13 @@
   margin: 0;
 }
 
-/* Рядок воронки: справа «8 з 11 · 73%», тож колонка числа ширша. */
+/* Рядок воронки: підпис зверху на всю ширину, під ним смуга і «8 з 11 · 73%». */
 .funnel-row {
-  grid-template-columns: minmax(110px, 40%) 1fr auto;
+  grid-template-columns: 1fr auto;
+  row-gap: 2px;
+}
+.funnel-row > :first-child {
+  grid-column: 1 / -1;
 }
 
 .agentic-flag {

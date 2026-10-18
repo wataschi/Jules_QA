@@ -42,7 +42,7 @@ export function ConfluenceForm({
     setDone(null);
     try {
       const result = await api.loadConfluenceTree(projectId, ref.trim());
-      const flat = flattenSources(result.sources);
+      const flat = flattenSources(result.sources).filter((node) => node.kind === 'confluence');
       // Корінь — вузол найменшої глибини серед завантажених.
       const root = flat.reduce<SourceNode | undefined>((best, node) => (!best || node.depth < best.depth ? node : best), undefined);
       setDone({ count: flat.length, truncated: result.truncated });

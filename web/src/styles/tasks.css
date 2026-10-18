@@ -1,0 +1,479 @@
+/* ══════════════════════ Задачі агентів ══════════════════════ */
+
+/* ── перелік ── */
+
+.tasks-list .tabs {
+  padding-top: var(--sp-1);
+}
+.tasks-mine {
+  align-self: flex-end;
+  padding-bottom: 6px;
+}
+.tasks-keys {
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.tbl-tasks tbody tr {
+  cursor: pointer;
+}
+.tbl-tasks .col-id {
+  width: 110px;
+}
+.tbl-tasks .col-kind {
+  width: 140px;
+  white-space: nowrap;
+}
+.tbl-tasks td.col-title {
+  max-width: 380px;
+}
+.tbl-tasks .col-module {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tbl-tasks .col-owners {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tasks-title-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.tasks-age {
+  font-variant-numeric: tabular-nums;
+}
+.tasks-age.stale {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+  font-weight: 600;
+}
+
+/* До 700 px рядки таблиці стають картками: без горизонтального скролу. */
+@media (max-width: 700px) {
+  .tasks-list .table-wrap {
+    overflow-x: visible;
+  }
+  table.tbl.tbl-tasks,
+  table.tbl.tbl-tasks tbody {
+    display: block;
+    min-width: 0;
+  }
+  table.tbl.tbl-tasks thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  table.tbl.tbl-tasks tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 4px var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--grid-line);
+    align-items: center;
+  }
+  table.tbl.tbl-tasks tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    max-width: none;
+    min-width: 0;
+  }
+  table.tbl.tbl-tasks td.col-title {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    max-width: none;
+    white-space: normal;
+  }
+  table.tbl.tbl-tasks td.col-title .truncate {
+    white-space: normal;
+  }
+  table.tbl.tbl-tasks td.col-id {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  table.tbl.tbl-tasks td.col-kind {
+    grid-column: 2;
+    grid-row: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.tbl.tbl-tasks td.col-state {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+  table.tbl.tbl-tasks td.col-module {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+  table.tbl.tbl-tasks td.col-age {
+    grid-column: 3;
+    grid-row: 3;
+    justify-self: end;
+  }
+  table.tbl.tbl-tasks td.col-owners {
+    grid-column: 1 / 3;
+    grid-row: 4;
+  }
+  table.tbl.tbl-tasks td.col-pr {
+    grid-column: 3;
+    grid-row: 4;
+    justify-self: end;
+  }
+}
+
+/* ── сторінка задачі ── */
+
+.tasks-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+.tasks-detail-main,
+.tasks-detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .tasks-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tasks-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: var(--sp-1);
+}
+.tasks-self-start {
+  align-self: flex-start;
+}
+.tasks-kv {
+  grid-template-columns: minmax(110px, auto) 1fr;
+}
+
+.tasks-state-note {
+  font-size: var(--fs-sm);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.tasks-state-note.state-review,
+.tasks-state-note.state-needs_info {
+  background: var(--warn-soft);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+.tasks-state-note.state-failed {
+  background: var(--bad-soft);
+  border-color: var(--bad-border);
+  color: var(--bad);
+}
+.tasks-state-note.state-done {
+  background: var(--good-soft);
+  border-color: var(--good-border);
+  color: var(--good);
+}
+.tasks-state-note.state-claimed {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+/* «Що перевіряє» — головне, що QA погоджує: виділено рамкою акценту. */
+.tasks-checks {
+  border: 1px solid var(--accent-border);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.tasks-checks-title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.tasks-checks-list {
+  margin: var(--sp-1) 0 0;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-md);
+}
+
+.tasks-tests,
+.tasks-jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.tasks-tests li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tasks-job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+/* ── дії ── */
+
+.tasks-actions .card-body {
+  gap: var(--sp-4);
+}
+.tasks-decide,
+.tasks-comment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.tasks-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.tasks-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--warn-border);
+  border-left: 4px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--r-md);
+}
+.tasks-question-title {
+  font-size: var(--fs-md);
+  color: var(--warn);
+}
+.tasks-question > p.pre-wrap {
+  font-size: var(--fs-md);
+  color: var(--text);
+}
+
+/* ── стрічка подій ── */
+
+.tasks-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  position: relative;
+}
+.tev {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--sp-2);
+  align-items: start;
+}
+.tev-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--neutral-chip-border);
+  background: var(--neutral-chip);
+  color: var(--neutral-chip-text);
+}
+.tev-agent .tev-badge {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+.tev-qa .tev-badge,
+.tev-dev .tev-badge {
+  background: var(--good-soft);
+  border-color: var(--good-border);
+  color: var(--good);
+}
+.tev-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tev-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.tev-type {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.tev-text {
+  font-size: var(--fs-sm);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+.tev-agent .tev-text {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+.tev-question .tev-text {
+  background: var(--warn-soft);
+  border-color: var(--warn-border);
+}
+/* Системні статуси — тихим рядком, без «бульбашки». */
+.tev-status .tev-text {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-2);
+}
+
+/* ── контекст ── */
+
+.tasks-ctx-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.tasks-ctx-block + .tasks-ctx-block,
+.tasks-req-grid + .tasks-ctx-block,
+.tasks-ctx-block + .tasks-req-grid {
+  border-top: 1px solid var(--grid-line);
+  padding-top: var(--sp-3);
+}
+.tasks-case-checks {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.tasks-req-grid {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: minmax(0, 1fr);
+}
+.tasks-req-grid.two {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.tasks-req-grid .tasks-ctx-block + .tasks-ctx-block {
+  border-top: 0;
+  padding-top: 0;
+}
+.tasks-req {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.tasks-req.frame {
+  border-style: dashed;
+}
+.tasks-req-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.tasks-req-head h4 {
+  font-size: var(--fs-sm);
+}
+.tasks-req-text {
+  overflow-wrap: anywhere;
+}
+.tasks-assets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--sp-2);
+}
+.tasks-asset {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tasks-asset img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 180px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.tasks-asset.large img {
+  max-height: 360px;
+}
+.tasks-asset-link {
+  display: block;
+}
+.tasks-asset figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tasks-asset-missing {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-4);
+  text-align: center;
+}
+.tasks-reading {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-3);
+  align-items: start;
+}
+.tasks-code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  background: var(--code-bg);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+  margin-right: var(--sp-1);
+}

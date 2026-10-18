@@ -81,7 +81,7 @@ export const SS = {
   since: 'з',
   checked: 'перевірено',
   envTitle: 'Змінні в .env на сервері',
-  envOptional: 'за потреби',
+  envOptional: 'якщо Confluence на внутрішньому сертифікаті',
   lastErrors: 'Останні помилки',
   lastErrorsNone: 'Помилок немає',
   envHint: 'Значення змінних Jules не показує. Після зміни .env перезапустіть службу Jules.',
@@ -168,7 +168,7 @@ export const SS = {
   sent: 'надіслано',
   queued: 'у черзі',
   failed: 'помилка',
-  kinds: {
+  notifyKinds: {
     source_down: 'Система недоступна',
     source_up: 'Система знову працює',
     stale_task: 'Задача чекає довго',

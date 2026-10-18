@@ -1,7 +1,9 @@
 /**
- * Налаштування: проєкт і базовий URL, профілі мапінгу TestRail, статус
- * інтеграцій (LLM / Confluence / TestRail), дефолти прогонів (старий
- * `/api/settings` рушія) і журнал запусків скілів із токенами й часом.
+ * Налаштування: проєкт і процес (репо, Jira, Telegram, пороги), доступ
+ * (хто я, ролі, токени), стан зовнішніх систем і підключення (LLM /
+ * Confluence / TestRail), модулі й код, дефолти прогонів (старий
+ * `/api/settings` рушія), журнал запусків скілів і звіти.
+ * Нові вкладки Jules 2.0 живуть у `./settings/`.
  */
 
 import { useEffect, useState } from 'react';
@@ -22,6 +24,13 @@ import { useQueryParams } from '../hooks/useQueryParams';
 import { S, skillNameLabel, skillRunStateLabel } from '../strings';
 import type { LegacySettings, Project, TestrailMapping } from '../types';
 import { formatAgo, formatDateTime, formatDuration, formatTokens } from '../utils/format';
+import { AccessTab } from './settings/AccessTab';
+import { HealthCard } from './settings/HealthCard';
+import { ModulesTab } from './settings/ModulesTab';
+import { ProcessCard } from './settings/ProcessCard';
+import { ReportsTab } from './settings/ReportsTab';
+import { SS } from './settings/strings';
+import '../styles/settings-v2.css';
 
 /**
  * Розділи налаштувань. Шість карток одним стовпцем змушували гортати екран,
@@ -29,9 +38,12 @@ import { formatAgo, formatDateTime, formatDuration, formatTokens } from '../util
  * вкладка живе в адресі — на потрібний розділ можна дати посилання.
  */
 const TABS = [
-  { value: 'project', label: S.settings.tabProject },
-  { value: 'integrations', label: S.settings.tabIntegrations },
-  { value: 'runs', label: S.settings.tabRuns },
+  { value: 'project', label: SS.tabs.project },
+  { value: 'access', label: SS.tabs.access },
+  { value: 'integrations', label: SS.tabs.integrations },
+  { value: 'modules', label: SS.tabs.modules },
+  { value: 'runs', label: SS.tabs.runs },
+  { value: 'reports', label: SS.tabs.reports },
 ];
 
 export default function SettingsPage() {
@@ -51,18 +63,25 @@ export default function SettingsPage() {
       />
 
       {active === 'project' && (
-        <div className="grid grid-2">
+        <>
           <ProjectCard project={project} />
-          <AccessCard userName={userName} onUserName={setUserName} />
-        </div>
+          <ProcessCard />
+        </>
+      )}
+
+      {active === 'access' && (
+        <AccessTab browserCard={<AccessCard userName={userName} onUserName={setUserName} />} />
       )}
 
       {active === 'integrations' && (
         <>
+          <HealthCard />
           <IntegrationsCard projectId={projectId} />
           <MappingsCard projectId={projectId} />
         </>
       )}
+
+      {active === 'modules' && <ModulesTab />}
 
       {active === 'runs' && (
         <>
@@ -70,6 +89,8 @@ export default function SettingsPage() {
           <SkillLogCard projectId={projectId} />
         </>
       )}
+
+      {active === 'reports' && <ReportsTab />}
     </>
   );
 }
@@ -144,7 +165,7 @@ function AccessCard({ userName, onUserName }: { userName: string; onUserName: (n
   return (
     <section className="card">
       <div className="card-head">
-        <h2>{S.settings.access}</h2>
+        <h2>{SS.browserTitle}</h2>
       </div>
       <div className="card-body">
         <TextField
