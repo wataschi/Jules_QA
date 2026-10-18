@@ -96,7 +96,7 @@ const PATCHABLE: Record<string, string> = {
 export type ProjectSettingsPatch = {
   [K in keyof ProjectSettings]?: ProjectSettings[K] extends Record<string, unknown> | undefined
     ? Partial<NonNullable<ProjectSettings[K]>> | null
-    : ProjectSettings[K];
+    : ProjectSettings[K] | null;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

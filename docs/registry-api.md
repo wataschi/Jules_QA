@@ -69,8 +69,8 @@
 |---|---|---|
 | GET | `/proposals?projectId=&state=&kind=&sourceId=&blockId=&page=` | `Page<Proposal>`; кожен елемент додатково несе `blockHeading` і `blockText` (до 1200 символів) — без них у черзі апрувів не видно, де цитата вимоги, а де домисел AI |
 | POST | `/proposals` | ручне створення пропозиції інженером (розширення контракту: потрібне інтерфейсу й тестам) |
-| POST | `/proposals/approve` | `{ ids: string[], reviewer? }` → `{ approved, created, updated, errors }` — застосовує до реєстру в одній транзакції |
-| POST | `/proposals/reject` | `{ ids: string[], note?, reviewer? }` |
+| POST | `/proposals/approve` | `{ ids: string[] }` (роль `qa`; рецензент — той, хто погоджує) → `{ approved, created, updated, errors }` — застосовує до реєстру в одній транзакції |
+| POST | `/proposals/reject` | `{ ids: string[], note? }` (роль `qa`) |
 | PATCH | `/proposals/:id` | правка `payload` перед апрувом (інженер редагує формулювання) |
 | DELETE | `/proposals/:id` | прибрати з черги без рішення |
 
@@ -166,8 +166,23 @@
 3. Токен з `api_tokens`.
 4. Локальний режим: якщо не задано ні `JULES_API_TOKEN`, ні `JULES_REQUIRE_AUTH=1`.
 
-Токен CI має доступ лише до `ingest/*`, `status.md`, `pr-comment.md`, `cases/reserve` і
-`GET /projects/:id` свого проєкту. Чужий `projectId` для нього — 403.
+Шлях перевіряється без урахування регістру й зайвих скісних рисок, як його зіставляє Express:
+`/API/...` чи `//api/...` вимагають входу так само, як `/api/...`.
+
+**Ролі.**
+
+| Що | Хто |
+|---|---|
+| Погодження, відхилення й правка пропозицій; створення, зміна й видалення кейсів; секції й модулі; налаштування проєкту; входи; рішення по прочитаннях; підтвердження, «інакше», повтор і відхилення задач; карантин тестів | `qa` |
+| Задачі (створити, взяти, звітувати, питати), прогони `event: local`, резерв ID, «бачив» на коміті повз PR | `dev` і `qa` |
+| Прогони `event: pr`/`main`, `ingest/pr-event`, `ingest/push-check` | `ci` |
+| Користувачі, ролі, токени CI | `admin` |
+
+Адмін проходить усі перевірки. Персональний токен не дає більше, ніж власник має зараз: після
+зниження ролі токен знижується разом із нею.
+
+Токен CI має доступ лише до `POST ingest/*`, `GET status`, `GET status.md`, `GET pr-comment.md`,
+`POST cases/reserve` і `GET /projects/:id` свого проєкту. Чужий проєкт для нього — 403.
 
 | Метод | Шлях | Опис |
 |---|---|---|
@@ -185,8 +200,8 @@
 | GET | `/tasks/:id` | `{ task, events, jobs, context }` |
 | POST | `/tasks/:id/claim` · `/heartbeat` · `/release` | Оренда (дефолт 30 хв, `thresholds.leaseMinutes`) |
 | POST | `/tasks/:id/ask` · `/answer` · `/comment` | Питання агента (`needs_info`), відповідь QA (знову `queued`), коментар |
-| POST | `/tasks/:id/report` | `{ summary, checks[], tests[], prUrl?, branch? }` → `review`. Для `add_test`/`change_test`/`remove_test`/`stabilize` `prUrl` обов'язковий |
-| POST | `/tasks/:id/fail` · `/confirm` · `/request-changes` · `/reject` | Задача з PR закривається, коли QA підтвердив і PR злито; без PR — одразу після підтвердження |
+| POST | `/tasks/:id/report` | `{ summary, checks[], tests[], prUrl?, branch?, triage? }` → `review`. Для `add_test`/`change_test`/`remove_test`/`stabilize` `prUrl` обов'язковий |
+| POST | `/tasks/:id/fail` · `/confirm` · `/request-changes` · `/retry` · `/reject` | Задача з PR закривається, коли QA підтвердив і злито саме PR останнього звіту; без PR — одразу після підтвердження. Підтвердження розбору (`triage`) застосовує його наслідки: дефект, задачу на тест або карантин і стабілізацію. `retry` повертає невдалу задачу в чергу; та сама причина (наприклад, тест знову впав) робить це сама |
 
 Види задач: `add_test`, `change_test`, `remove_test`, `plan_module`, `read_asset`, `triage`,
 `stabilize`, `question`. Задачі `question` — питання до людей, агенти їх не беруть.
@@ -211,7 +226,7 @@
 
 | Метод | Шлях | Опис |
 |---|---|---|
-| POST | `/ingest/run` | `{ sha, branch, prNumber?, event: pr\|main\|local, source, runUrl?, manifest?, results[], coverage?, mutation?, assertionChanges?, codeowners? }` → `{ runId, tests, failed, unknownCases, tasks }`. Прогін `kind='ci'`; на main — `triage` на падіння, `stabilize` на флейки, кейс із тестом на main стає `automated` |
+| POST | `/ingest/run` | `{ sha, branch, prNumber?, event: pr\|main\|local, source, runUrl?, manifest?, results[], coverage?, mutation?, assertionChanges?, codeowners? }` → `{ runId, tests, failed, unknownCases, tasks }`. Прогін `kind='ci'`; на main — `triage` на падіння, `stabilize` на флейки, кейс із тестом на main стає `automated`, а кейс, усі тести якого прибрано з коду, — знову `candidate`. Стан тестів, їхні зв'язки з кейсами й статус кейса задає лише main; прогони PR і локальні додають результати. Порожній маніфест ігнорується. Ліміт тіла — 50 МБ (решта API — 1 МБ) |
 | POST | `/ingest/pr-event` | `{ prNumber, state: opened\|merged\|closed }` — злиття закриває підтверджені задачі, закриття без злиття повертає їх у чергу |
 | POST | `/ingest/push-check` | `{ sha, branch, viaPr, prNumbers }` — коміт у main повз PR позначається і йде в сповіщення |
 | GET | `/status.md?projectId=&branch=main` · `/status` | Вміст `QA_STATUS.md` (детермінований) або ті самі дані JSON |
